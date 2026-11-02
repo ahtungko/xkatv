@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@xkatv/cms-core": ["./packages/cms-core/src/index.ts"],
+      "@xkatv/cms-core/m3u8": ["./packages/cms-core/src/m3u8/index.ts"],
+      "@xkatv/cms-core/source": ["./packages/cms-core/src/source/index.ts"]
+    },
+    "types": ["node"],
+    "skipLibCheck": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noEmit": true
+  },
+  "include": ["src", "vite.config.ts", "functions", "netlify", "api", "shared"]
+}

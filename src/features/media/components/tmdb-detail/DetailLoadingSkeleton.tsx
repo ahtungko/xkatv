@@ -1,0 +1,85 @@
+import { Skeleton } from '@/shared/components/ui/skeleton'
+
+export function DetailLoadingSkeleton() {
+  return (
+    <div className="space-y-0 [&_[data-slot=skeleton]]:bg-zinc-200 [&_[data-slot=skeleton]]:ring-1 [&_[data-slot=skeleton]]:ring-zinc-300/70 dark:[&_[data-slot=skeleton]]:bg-zinc-700/45 dark:[&_[data-slot=skeleton]]:ring-zinc-600/40">
+      <section className="relative overflow-hidden rounded-2xl sm:rounded-3xl">
+        <Skeleton className="h-[440px] w-full sm:h-[480px] md:h-[620px]" />
+        <div className="absolute inset-0 flex min-h-[440px] flex-col justify-end gap-5 p-5 sm:min-h-[480px] sm:p-7 md:min-h-[620px] md:gap-6 md:p-10 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-4 md:max-w-2xl">
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-[78vw] max-w-[280px] md:h-18 md:w-80 rounded-xl" />
+              <Skeleton className="h-4 w-56 md:h-5 md:w-72 rounded-full" />
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-hidden md:hidden">
+              <Skeleton className="h-6 w-14 shrink-0 rounded-full" />
+              <Skeleton className="h-6 w-12 shrink-0 rounded-full" />
+              <Skeleton className="h-6 w-14 shrink-0 rounded-full" />
+              <Skeleton className="h-6 w-12 shrink-0 rounded-full" />
+            </div>
+
+            <div className="hidden flex-wrap items-center gap-2 md:flex">
+              <Skeleton className="h-7 w-18 rounded-full" />
+              <Skeleton className="h-7 w-16 rounded-full" />
+              <Skeleton className="h-7 w-20 rounded-full" />
+              <Skeleton className="h-7 w-22 rounded-full" />
+              <Skeleton className="h-7 w-24 rounded-full" />
+              <Skeleton className="h-7 w-24 rounded-full" />
+            </div>
+
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full md:w-[90%] rounded-md" />
+              <Skeleton className="h-4 w-[84%] md:w-[84%] rounded-md" />
+              <Skeleton className="hidden h-4 w-[68%] md:block md:w-[68%] rounded-md" />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Skeleton className="h-11 sm:h-12 w-32 rounded-full" />
+              <Skeleton className="h-11 sm:h-12 w-32 rounded-full" />
+            </div>
+          </div>
+
+          <div className="hidden w-44 shrink-0 overflow-hidden rounded-2xl lg:block aspect-[2/3]">
+            <Skeleton className="h-full w-full" />
+          </div>
+        </div>
+      </section>
+
+      <section className="relative mt-4 flex justify-start sm:justify-center px-2">
+        <div className="flex items-center gap-2 rounded-full bg-card/60 p-1.5 border border-border/45">
+          <Skeleton className="h-7 w-16 rounded-full" />
+          <Skeleton className="h-7 w-20 rounded-full" />
+          <Skeleton className="h-7 w-24 rounded-full" />
+          <Skeleton className="h-7 w-16 rounded-full" />
+          <Skeleton className="h-7 w-18 rounded-full" />
+        </div>
+      </section>
+
+      <div className="mt-6 space-y-8 px-2 pb-6 md:px-3 md:pb-8">
+        <section className="space-y-4">
+          <Skeleton className="h-6 w-24 rounded-md" />
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-6 w-14 rounded-full" />
+            <Skeleton className="h-6 w-18 rounded-full" />
+            <Skeleton className="h-6 w-16 rounded-full" />
+            <Skeleton className="h-6 w-20 rounded-full" />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 9 }).map((_, index) => (
+              <Skeleton key={`detail-skeleton-${index}`} className="h-16 w-full rounded-xl" />
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <Skeleton className="h-6 w-28 rounded-md" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {Array.from({ length: 12 }).map((_, index) => (
+              <Skeleton key={`recommendation-skeleton-${index}`} className="aspect-[2/3] w-full rounded-2xl" />
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}

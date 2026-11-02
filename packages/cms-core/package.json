@@ -1,0 +1,70 @@
+{
+  "name": "@xkatv/cms-core",
+  "version": "1.0.0",
+  "description": "CMS视频源核心逻辑库 - 无头、纯函数、事件驱动",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "development": {
+        "types": "./src/index.ts",
+        "import": "./src/index.ts"
+      },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./m3u8": {
+      "development": {
+        "types": "./src/m3u8/index.ts",
+        "import": "./src/m3u8/index.ts"
+      },
+      "types": "./dist/m3u8/index.d.ts",
+      "import": "./dist/m3u8/index.js"
+    },
+    "./source": {
+      "development": {
+        "types": "./src/source/index.ts",
+        "import": "./src/source/index.ts"
+      },
+      "types": "./dist/source/index.d.ts",
+      "import": "./dist/source/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "cms",
+    "video",
+    "vod",
+    "search",
+    "headless"
+  ],
+  "author": "ahtungko",
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.12"
+  },
+  "peerDependencies": {
+    "hls.js": "^1.5.0"
+  },
+  "peerDependenciesMeta": {
+    "hls.js": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

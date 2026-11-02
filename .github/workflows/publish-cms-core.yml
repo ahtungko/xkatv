@@ -1,0 +1,87 @@
+name: Publish @xkatv/cms-core
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号（如 1.0.1），留空则使用 package.json 中的当前版本'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve publish version
+        id: version
+        run: |
+          INPUT_VERSION="$(printf '%s' '${{ inputs.version }}' | xargs)"
+          CURRENT_VERSION="$(node -p "require('./packages/cms-core/package.json').version")"
+
+          if [ -n "$INPUT_VERSION" ]; then
+            TARGET_VERSION="$INPUT_VERSION"
+          else
+            TARGET_VERSION="$CURRENT_VERSION"
+          fi
+
+          if [ -z "$TARGET_VERSION" ]; then
+            echo "::error::无法解析发布版本号。"
+            exit 1
+          fi
+
+          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "target=$TARGET_VERSION" >> $GITHUB_OUTPUT
+
+          if [ "$TARGET_VERSION" = "$CURRENT_VERSION" ]; then
+            echo "need_bump=false" >> $GITHUB_OUTPUT
+            echo "发布版本与当前版本一致：$TARGET_VERSION（跳过版本写回）"
+          else
+            echo "need_bump=true" >> $GITHUB_OUTPUT
+            echo "将版本从 $CURRENT_VERSION 更新为 $TARGET_VERSION"
+          fi
+
+      - name: Bump version
+        if: steps.version.outputs.need_bump == 'true'
+        working-directory: packages/cms-core
+        run: npm version ${{ steps.version.outputs.target }} --no-git-tag-version
+
+      - name: Check npm version availability
+        run: |
+          TARGET_VERSION='${{ steps.version.outputs.target }}'
+          PACKAGE_NAME='@xkatv/cms-core'
+
+          if npm view "${PACKAGE_NAME}@${TARGET_VERSION}" version >/dev/null 2>&1; then
+            echo "::error::${PACKAGE_NAME}@${TARGET_VERSION} 已存在，请使用更高版本号。"
+            exit 1
+          fi
+
+          echo "${PACKAGE_NAME}@${TARGET_VERSION} 可发布。"
+
+      - name: Build
+        run: pnpm --filter @xkatv/cms-core build
+
+      - name: Publish
+        working-directory: packages/cms-core
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

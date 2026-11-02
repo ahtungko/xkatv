@@ -1,0 +1,232 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+
+env:
+  GITHUB_REGISTRY: ghcr.io
+  IMAGE_NAME: xkatv
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          check-latest: true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Get pnpm store path
+        id: pnpm-store
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm store
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.STORE_PATH }}
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run linter
+        run: pnpm lint
+
+      - name: Run tests
+        run: pnpm test
+
+  build-and-push:
+    needs: lint
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 20
+
+      - name: Generate project metadata
+        run: node scripts/project-metadata.mjs --output .generated/project-metadata.json
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check Docker Hub credentials
+        id: dockerhub
+        run: |
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "enabled=false" >> $GITHUB_OUTPUT
+            echo "::warning::DOCKERHUB_USERNAME 或 DOCKERHUB_TOKEN 未配置，将跳过 Docker Hub 推送，仅推送 GHCR。"
+          fi
+
+      - name: Normalize Docker Hub credentials
+        id: dockerhub-creds
+        if: steps.dockerhub.outputs.enabled == 'true'
+        env:
+          RAW_DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          RAW_DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          DOCKERHUB_USERNAME_CLEAN="$(printf '%s' "$RAW_DOCKERHUB_USERNAME" | tr -d '\r' | xargs)"
+          DOCKERHUB_TOKEN_CLEAN="$(printf '%s' "$RAW_DOCKERHUB_TOKEN" | tr -d '\r' | xargs)"
+
+          if [ -z "$DOCKERHUB_USERNAME_CLEAN" ] || [ -z "$DOCKERHUB_TOKEN_CLEAN" ]; then
+            echo "::warning::Docker Hub 凭据清洗后为空，将跳过 Docker Hub 推送。"
+            echo "enabled=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "::add-mask::$DOCKERHUB_TOKEN_CLEAN"
+          echo "enabled=true" >> $GITHUB_OUTPUT
+          echo "username=$DOCKERHUB_USERNAME_CLEAN" >> $GITHUB_OUTPUT
+          echo "token=$DOCKERHUB_TOKEN_CLEAN" >> $GITHUB_OUTPUT
+
+      - name: Log in to Docker Hub
+        id: dockerhub-login
+        if: steps.dockerhub-creds.outputs.enabled == 'true'
+        continue-on-error: true
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ steps.dockerhub-creds.outputs.username }}
+          password: ${{ steps.dockerhub-creds.outputs.token }}
+
+      - name: Decide Docker Hub publish
+        id: dockerhub-publish
+        run: |
+          if [ "${{ steps.dockerhub-creds.outputs.enabled }}" != "true" ]; then
+            echo "enabled=false" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.dockerhub-login.outcome }}" = "success" ]; then
+            echo "enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "enabled=false" >> $GITHUB_OUTPUT
+            echo "::warning::Docker Hub 登录失败，将仅推送 GHCR。请检查 DOCKERHUB_USERNAME 与 DOCKERHUB_TOKEN。"
+          fi
+
+      - name: Resolve Docker Hub image
+        id: dockerhub-image
+        run: |
+          if [ "${{ steps.dockerhub-publish.outputs.enabled }}" = "true" ]; then
+            echo "value=${{ steps.dockerhub-creds.outputs.username }}/${{ env.IMAGE_NAME }}" >> $GITHUB_OUTPUT
+          else
+            echo "value=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Resolve GHCR owner
+        id: ghcr-owner
+        env:
+          RAW_GHCR_OWNER: ${{ github.repository_owner }}
+        run: |
+          GHCR_OWNER_CLEAN="$(printf '%s' "$RAW_GHCR_OWNER" | tr '[:upper:]' '[:lower:]' | xargs)"
+          if [ -z "$GHCR_OWNER_CLEAN" ]; then
+            echo "::error::无法解析 GHCR 仓库所有者。"
+            exit 1
+          fi
+          echo "value=$GHCR_OWNER_CLEAN" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: |
+            ghcr.io/${{ steps.ghcr-owner.outputs.value }}/${{ env.IMAGE_NAME }}
+            ${{ steps.dockerhub-image.outputs.value }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.version }}
+
+  security-scan:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+
+    steps:
+      - name: Resolve GHCR owner
+        id: ghcr-owner
+        env:
+          RAW_GHCR_OWNER: ${{ github.repository_owner }}
+        run: |
+          GHCR_OWNER_CLEAN="$(printf '%s' "$RAW_GHCR_OWNER" | tr '[:upper:]' '[:lower:]' | xargs)"
+          if [ -z "$GHCR_OWNER_CLEAN" ]; then
+            echo "::error::无法解析 GHCR 仓库所有者。"
+            exit 1
+          fi
+          echo "value=$GHCR_OWNER_CLEAN" >> $GITHUB_OUTPUT
+
+      - name: Log in to GHCR for Trivy scan
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: 'ghcr.io/${{ steps.ghcr-owner.outputs.value }}/${{ env.IMAGE_NAME }}:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          version: 'v0.70.0'
+          token-setup-trivy: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3
+        with:
+          sarif_file: 'trivy-results.sarif'

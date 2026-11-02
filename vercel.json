@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "installCommand": "pnpm install",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/account-password",
+      "destination": "/api/account-password"
+    },
+    {
+      "source": "/api/accounts",
+      "destination": "/api/accounts"
+    },
+    {
+      "source": "/proxy",
+      "destination": "/api/proxy"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

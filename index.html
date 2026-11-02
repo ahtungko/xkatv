@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <script src="/runtime-config.js"></script>
+    <!-- 禁止移动端缩放：注意会影响无障碍可访问性（视力障碍用户无法放大） -->
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0,user-scalable=no"
+    />
+    <title>__PROJECT_NAME__</title>
+    <meta name="description" content="__PROJECT_DESCRIPTION__" />
+    <meta name="author" content="__PROJECT_OWNER__" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#ffffff" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      /* 额外保险（主要针对旧版 iOS Safari 的双指/三指手势） */
+      document.addEventListener(
+        'gesturestart',
+        function (e) {
+          e.preventDefault()
+        },
+        { passive: false },
+      )
+    </script>
+    <script type="module" src="/src/app/main.tsx"></script>
+  </body>
+</html>
