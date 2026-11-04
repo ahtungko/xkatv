@@ -4,7 +4,7 @@ import type { LiveChannel, LiveSubscription } from '@/shared/types/live'
 import { parseInitialLiveSubscriptions } from '@/shared/config/live.config'
 import { parseM3uPlaylist } from '@/features/live/lib/m3uParser'
 import { buildProxyRequestUrl } from '@/shared/config/api.config'
-import { useSettingStore } from '@/shared/store/settingStore'
+import { getLiveProxyUrl } from '@/shared/store/settingStore'
 
 interface LiveState {
   subscriptions: LiveSubscription[]
@@ -40,10 +40,6 @@ function getActiveChannelsFromSubs(subscriptions: LiveSubscription[]): LiveChann
     )
 }
 
-function getLiveProxyUrl(): string {
-  const { network } = useSettingStore.getState()
-  return network.liveProxyUrl?.trim() || network.proxyUrl
-}
 
 async function fetchM3uContent(url: string, proxyUrl?: string): Promise<string> {
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'

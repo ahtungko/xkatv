@@ -232,3 +232,12 @@ export const useSettingStore = create<SettingStore>()(
     },
   ),
 )
+
+export function getLiveProxyUrl(): string {
+  const { network } = useSettingStore.getState()
+  return (
+    network.liveProxyUrl?.trim() ||
+    getPublicEnv('XKA_LIVE_PROXY_URL')?.trim() ||
+    network.proxyUrl
+  )
+}

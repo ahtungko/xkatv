@@ -2,6 +2,7 @@ import { Input } from '@/shared/components/ui/input'
 import { Switch } from '@/shared/components/ui/switch'
 import { CloudLightning, Layers, Link, RefreshCw, Timer, Tv } from 'lucide-react'
 import { useSettingStore } from '@/shared/store/settingStore'
+import { getPublicEnv } from '@/shared/config/runtimeEnv'
 import { SettingsItem, SettingsSection } from '../common'
 
 export default function NetworkSettings() {
@@ -53,7 +54,7 @@ export default function NetworkSettings() {
               id="liveProxyUrl"
               className="pl-9"
               value={network.liveProxyUrl || ''}
-              placeholder="https://worker1.workers.dev, https://worker2.workers.dev"
+              placeholder={getPublicEnv('XKA_LIVE_PROXY_URL') || 'https://worker1.workers.dev, https://worker2.workers.dev'}
               onChange={e => setNetworkSettings({ liveProxyUrl: e.target.value })}
             />
           </div>

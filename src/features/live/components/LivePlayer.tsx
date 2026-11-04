@@ -3,7 +3,7 @@ import Artplayer from 'artplayer'
 import Hls from 'hls.js'
 import type { LiveChannel } from '@/shared/types/live'
 import { buildProxyRequestUrl } from '@/shared/config/api.config'
-import { useSettingStore } from '@/shared/store/settingStore'
+import { getLiveProxyUrl, useSettingStore } from '@/shared/store/settingStore'
 import { Tv, RefreshCw, AlertCircle } from 'lucide-react'
 import { Button } from '@/shared/components/ui/button'
 
@@ -14,11 +14,6 @@ interface LivePlayerProps {
 
 type ArtplayerWithHls = Artplayer & {
   hls?: Hls
-}
-
-function getLiveProxyUrl(): string {
-  const { network } = useSettingStore.getState()
-  return network.liveProxyUrl?.trim() || network.proxyUrl
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
