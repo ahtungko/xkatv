@@ -75,9 +75,14 @@ export function LivePlayer({ channel, className }: LivePlayerProps) {
         const LiveLoader = createLiveHlsLoader(Hls)
         const hls = new Hls({
           enableWorker: true,
-          lowLatencyMode: true,
+          lowLatencyMode: false,
           backBufferLength: 30,
-          liveSyncDurationCount: 3,
+          liveSyncDurationCount: 6,
+          liveMaxLatencyDurationCount: 15,
+          maxBufferLength: 30,
+          maxMaxBufferLength: 60,
+          maxBufferHole: 0.5,
+          highBufferWatchdogPeriod: 2,
           loader: LiveLoader as unknown as typeof Hls.DefaultConfig.loader,
         })
 
