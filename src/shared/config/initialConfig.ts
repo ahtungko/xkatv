@@ -7,6 +7,7 @@ export interface SettingsConfig {
     concurrencyLimit?: number
     isProxyEnabled?: boolean
     proxyUrl?: string
+    liveProxyUrl?: string
   }
   search?: {
     isSearchHistoryEnabled?: boolean
