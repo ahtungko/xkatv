@@ -8,6 +8,7 @@ export const PUBLIC_ENV_KEYS = [
   'XKA_TMDB_IMAGE_BASE_URL',
   'XKA_DISABLE_ANALYTICS',
   'XKA_INITIAL_CONFIG',
+  'XKA_INITIAL_LIVE_SUBSCRIPTIONS',
 ] as const
 
 export const LEGACY_PUBLIC_ENV_KEYS = [] as const

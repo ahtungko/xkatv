@@ -24,6 +24,7 @@ interface NavigationProps {
 const navLinks = [
   { title: '首页', path: '/' },
   { title: '探索', path: '/search' },
+  { title: '直播', path: '/live' },
   { title: '追剧', path: '/favorites' },
   { title: '历史', path: '/history' },
 ]

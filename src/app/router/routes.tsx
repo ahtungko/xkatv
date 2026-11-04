@@ -17,6 +17,7 @@ const AdminView = lazy(() => import('@/features/auth/AdminView'))
 // Views (lazy loaded from features)
 const HomeView = lazy(() => import('@/features/home/views/HomeView'))
 const SearchHubView = lazy(() => import('@/features/search/views/SearchHubView'))
+const LiveView = lazy(() => import('@/features/live/views/LiveView'))
 const FavoritesView = lazy(() => import('@/features/favorites/views/FavoritesView'))
 const HistoryView = lazy(() => import('@/features/history/views/HistoryView'))
 const TmdbDetailView = lazy(() => import('@/features/media/views/TmdbDetailView'))
@@ -129,6 +130,14 @@ const router = createBrowserRouter([
         element: (
           <SuspenseWrapper>
             <SearchHubView />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'live',
+        element: (
+          <SuspenseWrapper>
+            <LiveView />
           </SuspenseWrapper>
         ),
       },

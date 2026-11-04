@@ -110,6 +110,54 @@ export const onRequest = async (context: Context) => {
     const timeoutMs = getProxyTimeoutMs(context.env)
     const response = await handleProxyRequest(targetUrl, timeoutMs)
 
+    const contentType = response.headers.get('content-type') || ''
+    const isM3u8 =
+      targetUrl.toLowerCase().includes('.m3u8') ||
+      contentType.includes('mpegurl') ||
+      contentType.includes('x-mpegurl')
+
+    if (isM3u8 && response.status === 200) {
+      let text = await response.text()
+      if (text.includes('#EXTM3U')) {
+        const lines = text.split('\n')
+        text = lines
+          .map(line => {
+            const trimmed = line.trim()
+            if (!trimmed) return line
+            if (trimmed.startsWith('#') && trimmed.includes('URI="')) {
+              return line.replace(/URI="([^"]+)"/g, (match, uri) => {
+                if (!uri.startsWith('http://') && !uri.startsWith('https://')) {
+                  try {
+                    return `URI="${new URL(uri, response.url || targetUrl).href}"`
+                  } catch {
+                    return match
+                  }
+                }
+                return match
+              })
+            }
+            if (
+              !trimmed.startsWith('#') &&
+              !trimmed.startsWith('http://') &&
+              !trimmed.startsWith('https://')
+            ) {
+              try {
+                return new URL(trimmed, response.url || targetUrl).href
+              } catch {
+                return line
+              }
+            }
+            return line
+          })
+          .join('\n')
+      }
+      const newResponse = new Response(text, response)
+      Object.entries(corsHeaders).forEach(([key, value]) => {
+        newResponse.headers.set(key, value)
+      })
+      return newResponse
+    }
+
     // Create a new response with the body from the fetch
     const newResponse = new Response(response.body, response)
 

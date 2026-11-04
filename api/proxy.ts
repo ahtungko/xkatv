@@ -1,5 +1,11 @@
 import type { ApiRequest, ApiResponse } from '../shared/serverless-http.js'
-import { getProxyTimeoutMs, handleProxyRequest, parseProxyError } from '../shared/proxy-core.js'
+import {
+  getProxyTimeoutMs,
+  handleProxyRequest,
+  isM3u8Response,
+  parseProxyError,
+  rewriteM3u8Urls,
+} from '../shared/proxy-core.js'
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   // CORS
@@ -20,12 +26,19 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const targetUrl = decodeURIComponent(url)
     const response = await handleProxyRequest(targetUrl)
-    const text = await response.text()
     const contentType = response.headers.get('content-type') || 'application/json'
 
     res.setHeader('Content-Type', contentType)
     res.setHeader('Cache-Control', 'public, max-age=60')
-    res.status(response.status).send(text)
+
+    if (isM3u8Response(targetUrl, contentType) && response.status === 200) {
+      let text = await response.text()
+      text = rewriteM3u8Urls(text, response.url || targetUrl)
+      return res.status(response.status).send(text)
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer())
+    res.status(response.status).send(buffer)
   } catch (error) {
     const { message, cause } = parseProxyError(error)
     const timeoutMs = getProxyTimeoutMs()

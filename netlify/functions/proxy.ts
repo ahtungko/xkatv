@@ -1,5 +1,11 @@
 import type { Handler, HandlerEvent } from '@netlify/functions'
-import { getProxyTimeoutMs, handleProxyRequest, parseProxyError } from '../../src/shared/lib/proxy'
+import {
+  getProxyTimeoutMs,
+  handleProxyRequest,
+  isM3u8Response,
+  parseProxyError,
+  rewriteM3u8Urls,
+} from '../../src/shared/lib/proxy'
 
 const handler: Handler = async (event: HandlerEvent) => {
   const headers = {
@@ -28,16 +34,30 @@ const handler: Handler = async (event: HandlerEvent) => {
 
   try {
     const response = await handleProxyRequest(url)
-    const text = await response.text()
     const contentType = response.headers.get('content-type') || 'application/json'
 
+    if (isM3u8Response(url, contentType) && response.status === 200) {
+      let text = await response.text()
+      text = rewriteM3u8Urls(text, response.url || url)
+      return {
+        statusCode: response.status,
+        headers: {
+          ...headers,
+          'Content-Type': contentType,
+        },
+        body: text,
+      }
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer())
     return {
       statusCode: response.status,
       headers: {
         ...headers,
         'Content-Type': contentType,
       },
-      body: text,
+      body: buffer.toString('base64'),
+      isBase64Encoded: true,
     }
   } catch (error) {
     const { message, cause } = parseProxyError(error)

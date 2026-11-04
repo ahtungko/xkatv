@@ -1,5 +1,6 @@
 import VideoSource from '../components/VideoSource'
 import SubscriptionManager from '../components/VideoSource/SubscriptionManager'
+import LiveSourceManager from '../components/LiveSource/LiveSourceManager'
 import { SettingsPageShell } from '../components/common'
 
 /**
@@ -13,6 +14,7 @@ export default function SourceSettings() {
       showHeader={false}
     >
       <SubscriptionManager />
+      <LiveSourceManager />
       <VideoSource />
     </SettingsPageShell>
   )

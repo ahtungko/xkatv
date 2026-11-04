@@ -14,7 +14,7 @@ import {
 } from '@/shared/components/ui/sidebar'
 import { NavLink } from 'react-router'
 import { motion } from 'framer-motion'
-import { Home, Search, Star, History, Settings, UserRound, Users, EyeOff } from 'lucide-react'
+import { Home, Search, Star, History, Settings, UserRound, Users, EyeOff, Tv } from 'lucide-react'
 import { toast } from 'sonner'
 import { XkaLogo } from '@/shared/components/icons'
 import { useVersionStore, usePrivateModeStore } from '../store'
@@ -60,6 +60,11 @@ export default function SideBar({
         title: '搜索中心',
         url: '/search',
         icon: Search,
+      },
+      {
+        title: '电视直播',
+        url: '/live',
+        icon: Tv,
       },
       {
         title: '收藏夹',

@@ -24,20 +24,35 @@ export const DEFAULT_PROXY_URL = '/proxy?url='
 export const PROXY_URL = DEFAULT_PROXY_URL
 export const M3U8_PATTERN = /\$https?:\/\/[^"'\s]+?\.m3u8/g
 
-export const normalizeProxyPrefix = (proxyUrl?: string | null): string => {
+export const getProxyEndpoints = (proxyUrl?: string | null): string[] => {
   const value = typeof proxyUrl === 'string' ? proxyUrl.trim() : ''
-  const base = value || DEFAULT_PROXY_URL
+  if (!value) return [DEFAULT_PROXY_URL]
+  const entries = value
+    .split(/[\n,]+/)
+    .map(s => s.trim())
+    .filter(Boolean)
+  return entries.length > 0 ? entries : [DEFAULT_PROXY_URL]
+}
 
-  if (base.includes('{url}')) return base
-  if (/[?&]url=$/i.test(base)) return base
-  if (/[?&]url=[^&]*$/i.test(base)) {
-    return base.replace(/([?&]url=)[^&]*$/i, '$1')
+export const normalizeSingleProxyPrefix = (base: string): string => {
+  const trimmed = base.trim() || DEFAULT_PROXY_URL
+  if (trimmed.includes('{url}')) return trimmed
+  if (/[?&]url=$/i.test(trimmed)) return trimmed
+  if (/[?&]url=[^&]*$/i.test(trimmed)) {
+    return trimmed.replace(/([?&]url=)[^&]*$/i, '$1')
   }
-  return base.includes('?') ? `${base}&url=` : `${base}?url=`
+  return trimmed.includes('?') ? `${trimmed}&url=` : `${trimmed}?url=`
+}
+
+export const normalizeProxyPrefix = (proxyUrl?: string | null): string => {
+  const endpoints = getProxyEndpoints(proxyUrl)
+  return normalizeSingleProxyPrefix(endpoints[0])
 }
 
 export const buildProxyRequestUrl = (targetUrl: string, proxyUrl?: string | null): string => {
-  const normalized = normalizeProxyPrefix(proxyUrl)
+  const endpoints = getProxyEndpoints(proxyUrl)
+  const chosen = endpoints[Math.floor(Math.random() * endpoints.length)]
+  const normalized = normalizeSingleProxyPrefix(chosen)
   if (normalized.includes('{url}')) {
     return normalized.split('{url}').join(encodeURIComponent(targetUrl))
   }

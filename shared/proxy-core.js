@@ -77,3 +77,48 @@ export function getTargetUrl(url) {
 
   return decodeURIComponent(targetUrl)
 }
+
+export function isM3u8Response(targetUrl, contentType = '') {
+  return (
+    targetUrl.toLowerCase().includes('.m3u8') ||
+    contentType.includes('mpegurl') ||
+    contentType.includes('x-mpegurl')
+  )
+}
+
+export function rewriteM3u8Urls(text, baseUrl) {
+  if (!text || !text.includes('#EXTM3U')) return text
+  const lines = text.split('\n')
+  const rewritten = lines.map(line => {
+    const trimmed = line.trim()
+    if (!trimmed) return line
+
+    // 处理包含 URI="..." 的所有 HLS 标签（如 EXT-X-KEY, EXT-X-MAP, EXT-X-MEDIA 等）
+    if (trimmed.startsWith('#') && trimmed.includes('URI="')) {
+      return line.replace(/URI="([^"]+)"/g, (match, uri) => {
+        if (!uri.startsWith('http://') && !uri.startsWith('https://')) {
+          try {
+            return `URI="${new URL(uri, baseUrl).href}"`
+          } catch {
+            return match
+          }
+        }
+        return match
+      })
+    }
+
+    if (
+      !trimmed.startsWith('#') &&
+      !trimmed.startsWith('http://') &&
+      !trimmed.startsWith('https://')
+    ) {
+      try {
+        return new URL(trimmed, baseUrl).href
+      } catch {
+        return line
+      }
+    }
+    return line
+  })
+  return rewritten.join('\n')
+}
