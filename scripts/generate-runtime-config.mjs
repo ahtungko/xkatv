@@ -13,6 +13,7 @@ export const PUBLIC_ENV_KEYS = [
   'XKA_DISABLE_ANALYTICS',
   'XKA_INITIAL_CONFIG',
   'XKA_INITIAL_LIVE_SUBSCRIPTIONS',
+  'XKA_LIVE_PROXY_URL',
 ]
 
 export function collectRuntimeConfig(environment = process.env) {

@@ -39,6 +39,11 @@ function getActiveChannelsFromSubs(subscriptions: LiveSubscription[]): LiveChann
     )
 }
 
+function getLiveProxyUrl(): string {
+  const { network } = useSettingStore.getState()
+  return network.liveProxyUrl?.trim() || network.proxyUrl
+}
+
 async function fetchM3uContent(url: string, proxyUrl?: string): Promise<string> {
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
   const isHttpTarget = url.startsWith('http://')
@@ -97,8 +102,7 @@ export const useLiveStore = create<LiveState>()(
         }))
 
         try {
-          const { network } = useSettingStore.getState()
-          const text = await fetchM3uContent(newSub.url, network.proxyUrl)
+          const text = await fetchM3uContent(newSub.url, getLiveProxyUrl())
           const channels = parseM3uPlaylist(text).map(c => ({
             ...c,
             id: `${id}_${c.id}`,
@@ -170,8 +174,7 @@ export const useLiveStore = create<LiveState>()(
 
         set({ isLoading: true, error: null })
         try {
-          const { network } = useSettingStore.getState()
-          const text = await fetchM3uContent(sub.url, network.proxyUrl)
+          const text = await fetchM3uContent(sub.url, getLiveProxyUrl())
           const channels = parseM3uPlaylist(text).map(c => ({
             ...c,
             id: `${id}_${c.id}`,
@@ -218,7 +221,7 @@ export const useLiveStore = create<LiveState>()(
         }
 
         set({ isLoading: true, error: null })
-        const { network } = useSettingStore.getState()
+        const liveProxy = getLiveProxyUrl()
 
         const fetchedMap = new Map<
           string,
@@ -228,7 +231,7 @@ export const useLiveStore = create<LiveState>()(
 
         for (const sub of activeSubs) {
           try {
-            const text = await fetchM3uContent(sub.url, network.proxyUrl)
+            const text = await fetchM3uContent(sub.url, liveProxy)
             const channels = parseM3uPlaylist(text).map(c => ({
               ...c,
               id: `${sub.id}_${c.id}`,

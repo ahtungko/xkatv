@@ -16,6 +16,11 @@ type ArtplayerWithHls = Artplayer & {
   hls?: Hls
 }
 
+function getLiveProxyUrl(): string {
+  const { network } = useSettingStore.getState()
+  return network.liveProxyUrl?.trim() || network.proxyUrl
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createLiveHlsLoader(HlsClass: any): any {
   return class LiveHlsLoader extends HlsClass.DefaultConfig.loader {
@@ -24,10 +29,9 @@ function createLiveHlsLoader(HlsClass: any): any {
       const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
       const originalUrl = context.url
 
-      // If page is HTTPS and target is HTTP, route through proxy pool
+      // If page is HTTPS and target is HTTP, route through live proxy pool
       if (isHttps && originalUrl && typeof originalUrl === 'string' && originalUrl.startsWith('http://')) {
-        const { network } = useSettingStore.getState()
-        context.url = buildProxyRequestUrl(originalUrl, network.proxyUrl)
+        context.url = buildProxyRequestUrl(originalUrl, getLiveProxyUrl())
       }
 
       super.load(context, config, callbacks)
@@ -48,7 +52,7 @@ export function LivePlayer({ channel, className }: LivePlayerProps) {
       const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
       const playUrl =
         isHttps && channel.url.startsWith('http://')
-          ? buildProxyRequestUrl(channel.url, useSettingStore.getState().network.proxyUrl)
+          ? buildProxyRequestUrl(channel.url, getLiveProxyUrl())
           : channel.url
       if (artRef.current.hls) {
         artRef.current.hls.destroy()
@@ -70,7 +74,7 @@ export function LivePlayer({ channel, className }: LivePlayerProps) {
 
     const initialUrl = channel
       ? isHttps && channel.url.startsWith('http://')
-        ? buildProxyRequestUrl(channel.url, useSettingStore.getState().network.proxyUrl)
+        ? buildProxyRequestUrl(channel.url, getLiveProxyUrl())
         : channel.url
       : ''
 

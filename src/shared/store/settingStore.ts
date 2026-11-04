@@ -10,6 +10,7 @@ interface NetworkSettings {
   concurrencyLimit: number
   isProxyEnabled: boolean
   proxyUrl: string
+  liveProxyUrl: string
 }
 
 interface SearchSettings {
@@ -126,7 +127,7 @@ export const useSettingStore = create<SettingStore>()(
       })),
       {
         name: 'xkatv-setting-store',
-        version: 14,
+        version: 15,
         migrate: (persistedState: unknown, version: number) => {
           const state = persistedState as Record<string, unknown>
           if (version < 2 && state.playback) {
@@ -216,6 +217,11 @@ export const useSettingStore = create<SettingStore>()(
               system.tmdbApiToken = DEFAULT_SETTINGS.system.tmdbApiToken
             }
             state.system = system
+          }
+          if (version < 15) {
+            const network = (state.network ?? {}) as Record<string, unknown>
+            network.liveProxyUrl ??= DEFAULT_SETTINGS.network.liveProxyUrl ?? ''
+            state.network = network
           }
           return state
         },

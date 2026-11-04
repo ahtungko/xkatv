@@ -12,6 +12,8 @@ export const DEFAULT_SETTINGS = {
     concurrencyLimit: envSettings?.network?.concurrencyLimit ?? 3,
     isProxyEnabled: envSettings?.network?.isProxyEnabled ?? true,
     proxyUrl: envSettings?.network?.proxyUrl ?? '/proxy?url=',
+    liveProxyUrl:
+      envSettings?.network?.liveProxyUrl ?? getPublicEnv('XKA_LIVE_PROXY_URL') ?? '',
   },
   search: {
     isSearchHistoryEnabled: envSettings?.search?.isSearchHistoryEnabled ?? true,

@@ -52,11 +52,11 @@ https://stream-proxy.your-name.workers.dev
 ## 在 xkaTV 中配置代理池
 
 1. 打开您的 xkaTV 站点，进入 **设置** -> **网络设置**。
-2. 在 **代理地址** 输入框中，填入上述 3 个域名（使用**英文逗号**或**换行**分隔）：
+2. 找到专用的 **电视直播专属代理池 (IPTV)** 输入框，填入上述 3 个域名（使用**英文逗号**或**换行**分隔）：
    ```text
    https://proxy-1.xxx.workers.dev, https://proxy-2.yyy.workers.dev, https://proxy-3.zzz.workers.dev
    ```
-3. 保存设置。
+3. 保存设置。（原有的「影视源代理地址」依然保持默认 `/proxy?url=` 即可，实现完全隔离，不挤占直播 Worker 配额）。
 
 > 💡 **自动负载均衡**：xkaTV 会自动将这 3 个节点组织为代理池。在播放 HTTP 直播流时，所有的切片下载与 manifest 刷新将在 3 个节点间随机轮询分发，均匀分摊配额。
 

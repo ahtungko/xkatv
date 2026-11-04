@@ -1,6 +1,6 @@
 import { Input } from '@/shared/components/ui/input'
 import { Switch } from '@/shared/components/ui/switch'
-import { CloudLightning, Layers, Link, RefreshCw, Timer } from 'lucide-react'
+import { CloudLightning, Layers, Link, RefreshCw, Timer, Tv } from 'lucide-react'
 import { useSettingStore } from '@/shared/store/settingStore'
 import { SettingsItem, SettingsSection } from '../common'
 
@@ -26,8 +26,8 @@ export default function NetworkSettings() {
         }
       />
       <SettingsItem
-        title="代理地址"
-        description="支持 /proxy?url=、完整地址，或使用 {url} 占位符。"
+        title="影视源代理地址"
+        description="供影视搜索与详情元数据使用，支持 /proxy?url=、完整地址，或使用 {url} 占位符。"
         control={
           <div className="relative w-full sm:w-[340px]">
             <Link className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
@@ -38,6 +38,23 @@ export default function NetworkSettings() {
               value={network.proxyUrl}
               placeholder="/proxy?url="
               onChange={e => setNetworkSettings({ proxyUrl: e.target.value })}
+            />
+          </div>
+        }
+      />
+      <SettingsItem
+        title="电视直播专属代理池 (IPTV)"
+        description="专供电视直播流与 TS 视频切片分流。支持配置多个 Worker 域名（逗号或换行分隔），自动多节点轮询；留空则回退至影视源代理。"
+        control={
+          <div className="relative w-full sm:w-[340px]">
+            <Tv className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+            <Input
+              type="text"
+              id="liveProxyUrl"
+              className="pl-9"
+              value={network.liveProxyUrl || ''}
+              placeholder="https://worker1.workers.dev, https://worker2.workers.dev"
+              onChange={e => setNetworkSettings({ liveProxyUrl: e.target.value })}
             />
           </div>
         }
