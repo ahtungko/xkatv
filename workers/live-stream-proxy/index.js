@@ -61,42 +61,18 @@ export default {
       // M3U8 播放列表重写：将相对切片路径转为绝对路径，避免浏览器相对路径解析错误
       if (isM3u8 && response.status === 200) {
         let text = await response.text()
-        if (text.includes('#EXTM3U')) {
-          const lines = text.split('\n')
-          const rewritten = lines.map(line => {
-            const trimmed = line.trim()
-            if (!trimmed) return line
-
-            // 处理包含 URI="..." 的所有 HLS 标签（如 EXT-X-KEY, EXT-X-MAP, EXT-X-MEDIA 等）
-            if (trimmed.startsWith('#') && trimmed.includes('URI="')) {
-              return line.replace(/URI="([^"]+)"/g, (match, uri) => {
-                if (!uri.startsWith('http://') && !uri.startsWith('https://')) {
-                  try {
-                    return `URI="${new URL(uri, response.url || targetUrl).href}"`
-                  } catch {
-                    return match
-                  }
-                }
-                return match
-              })
-            }
-
-            // 处理 TS 视频分片路径
-            if (
-              !trimmed.startsWith('#') &&
-              !trimmed.startsWith('http://') &&
-              !trimmed.startsWith('https://')
-            ) {
-              try {
-                return new URL(trimmed, response.url || targetUrl).href
-              } catch {
-                return line
-              }
-            }
-            return line
-          })
-          text = rewritten.join('\n')
-        }
+        const endpoint = new URL(request.url)
+        endpoint.searchParams.set('native', '1')
+        endpoint.searchParams.delete('url')
+        const prefix = endpoint.href + '&url='
+        text = rewriteM3u8Urls(
+          text,
+          response.url || targetUrl,
+          new URL(request.url).searchParams.get('native') === '1' ? prefix : '',
+        )
+        respHeaders.delete('content-length')
+        respHeaders.delete('content-encoding')
+        respHeaders.set('Cache-Control', 'no-store')
         return new Response(text, {
           status: response.status,
           statusText: response.statusText,
@@ -115,4 +91,29 @@ export default {
       return new Response(`Proxy Error: ${message}`, { status: 502, headers: corsHeaders })
     }
   },
+}
+
+function rewriteM3u8Urls(text, baseUrl, proxyPrefix = '') {
+  if (!text || !text.includes('#EXTM3U')) return text
+  const resolve = uri => {
+    try {
+      const absolute = new URL(uri, baseUrl)
+      return proxyPrefix && /^https?:$/.test(absolute.protocol)
+        ? proxyPrefix + encodeURIComponent(absolute.href)
+        : absolute.href
+    } catch {
+      return uri
+    }
+  }
+  return text
+    .split('\n')
+    .map(line => {
+      const trimmed = line.trim()
+      if (!trimmed) return line
+      if (trimmed.startsWith('#')) {
+        return line.replace(/URI="([^"]+)"/g, (_match, uri) => `URI="${resolve(uri)}"`)
+      }
+      return resolve(trimmed)
+    })
+    .join('\n')
 }

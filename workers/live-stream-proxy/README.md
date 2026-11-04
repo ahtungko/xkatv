@@ -1,5 +1,9 @@
 # Cloudflare Worker 直播流代理池部署指南
 
+原生 HLS 播放（例如不支持 Hls.js 的 Safari）需要重新部署最新版 Worker。
+播放器通过 `native=1` 请求递归代理：子播放列表、密钥和切片地址都会保留在代理域名下，避免 HTTP 混合内容请求。
+直播播放列表返回 `Cache-Control: no-store`，视频切片继续按上游策略处理。
+
 该 Worker 专为解决在 HTTPS 生产站点中播放国内 HTTP 电视直播流（IPTV）时的 **Mixed Content（混合内容被阻断）** 与 **CORS 跨域** 问题而设计。
 
 ---

@@ -26,8 +26,15 @@ export function proxyMiddleware(): Plugin {
           res.setHeader('Content-Type', contentType)
 
           if (isM3u8Response(targetUrl, contentType) && response.status === 200) {
+            res.setHeader('Cache-Control', 'no-store')
             let text = await response.text()
-            text = rewriteM3u8Urls(text, response.url || targetUrl)
+            text = rewriteM3u8Urls(
+              text,
+              response.url || targetUrl,
+              new URL(req.url, 'http://localhost').searchParams.get('native') === '1'
+                ? '/proxy?native=1&url='
+                : '',
+            )
             res.writeHead(response.status)
             return res.end(text)
           }

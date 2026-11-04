@@ -38,11 +38,16 @@ const handler: Handler = async (event: HandlerEvent) => {
 
     if (isM3u8Response(url, contentType) && response.status === 200) {
       let text = await response.text()
-      text = rewriteM3u8Urls(text, response.url || url)
+      text = rewriteM3u8Urls(
+        text,
+        response.url || url,
+        event.queryStringParameters?.native === '1' ? '/proxy?native=1&url=' : '',
+      )
       return {
         statusCode: response.status,
         headers: {
           ...headers,
+          'Cache-Control': 'no-store',
           'Content-Type': contentType,
         },
         body: text,

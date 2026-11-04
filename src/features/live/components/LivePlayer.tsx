@@ -25,7 +25,12 @@ function createLiveHlsLoader(HlsClass: any): any {
       const originalUrl = context.url
 
       // If page is HTTPS and target is HTTP, route through live proxy pool
-      if (isHttps && originalUrl && typeof originalUrl === 'string' && originalUrl.startsWith('http://')) {
+      if (
+        isHttps &&
+        originalUrl &&
+        typeof originalUrl === 'string' &&
+        originalUrl.startsWith('http://')
+      ) {
         context.url = buildProxyRequestUrl(originalUrl, getLiveProxyUrl())
       }
 
@@ -40,23 +45,10 @@ export function LivePlayer({ channel, className }: LivePlayerProps) {
   const [hasError, setHasError] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
+  const [retryAttempt, setRetryAttempt] = useState(0)
   const handleRetry = useCallback(() => {
-    setHasError(false)
-    setErrorMessage('')
-    if (artRef.current && channel) {
-      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
-      const playUrl =
-        isHttps && channel.url.startsWith('http://')
-          ? buildProxyRequestUrl(channel.url, getLiveProxyUrl())
-          : channel.url
-      if (artRef.current.hls) {
-        artRef.current.hls.destroy()
-        artRef.current.hls = undefined
-      }
-      artRef.current.type = 'm3u8'
-      artRef.current.switchUrl(playUrl)
-    }
-  }, [channel])
+    setRetryAttempt(attempt => attempt + 1)
+  }, [])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -97,8 +89,9 @@ export function LivePlayer({ channel, className }: LivePlayerProps) {
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
-                console.warn('[LivePlayer] 遇到网络错误，尝试恢复...', data)
-                hls.startLoad()
+                setHasError(true)
+                setErrorMessage('无法加载直播信号，请重试连接')
+                hls.destroy()
                 break
               case Hls.ErrorTypes.MEDIA_ERROR:
                 console.warn('[LivePlayer] 遇到媒体错误，尝试恢复...', data)
@@ -118,7 +111,13 @@ export function LivePlayer({ channel, className }: LivePlayerProps) {
           hls.destroy()
         })
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = url
+        // Native HLS has no custom loader: nested resources must stay proxied.
+        const nativeUrl = new URL(
+          buildProxyRequestUrl(channel!.url, getLiveProxyUrl()),
+          window.location.href,
+        )
+        nativeUrl.searchParams.set('native', '1')
+        video.src = nativeUrl.href
       } else {
         player.notice.show = '当前浏览器不支持播放此直播流'
       }
@@ -175,7 +174,7 @@ export function LivePlayer({ channel, className }: LivePlayerProps) {
         artRef.current = null
       }
     }
-  }, [channel])
+  }, [channel, retryAttempt])
 
   return (
     <div className={`relative overflow-hidden rounded-xl bg-black ${className || ''}`}>

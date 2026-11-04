@@ -118,40 +118,19 @@ export const onRequest = async (context: Context) => {
 
     if (isM3u8 && response.status === 200) {
       let text = await response.text()
-      if (text.includes('#EXTM3U')) {
-        const lines = text.split('\n')
-        text = lines
-          .map(line => {
-            const trimmed = line.trim()
-            if (!trimmed) return line
-            if (trimmed.startsWith('#') && trimmed.includes('URI="')) {
-              return line.replace(/URI="([^"]+)"/g, (match, uri) => {
-                if (!uri.startsWith('http://') && !uri.startsWith('https://')) {
-                  try {
-                    return `URI="${new URL(uri, response.url || targetUrl).href}"`
-                  } catch {
-                    return match
-                  }
-                }
-                return match
-              })
-            }
-            if (
-              !trimmed.startsWith('#') &&
-              !trimmed.startsWith('http://') &&
-              !trimmed.startsWith('https://')
-            ) {
-              try {
-                return new URL(trimmed, response.url || targetUrl).href
-              } catch {
-                return line
-              }
-            }
-            return line
-          })
-          .join('\n')
-      }
+      const endpoint = new URL(context.request.url)
+      endpoint.searchParams.set('native', '1')
+      endpoint.searchParams.delete('url')
+      const prefix = endpoint.href + '&url='
+      text = rewriteM3u8Urls(
+        text,
+        response.url || targetUrl,
+        new URL(context.request.url).searchParams.get('native') === '1' ? prefix : '',
+      )
       const newResponse = new Response(text, response)
+      newResponse.headers.delete('content-length')
+      newResponse.headers.delete('content-encoding')
+      newResponse.headers.set('Cache-Control', 'no-store')
       Object.entries(corsHeaders).forEach(([key, value]) => {
         newResponse.headers.set(key, value)
       })
@@ -170,12 +149,40 @@ export const onRequest = async (context: Context) => {
   } catch (error) {
     const timeoutMs = getProxyTimeoutMs(context.env)
     const { message, cause } = parseProxyError(error)
-    return new Response(JSON.stringify({ error: 'Proxy request failed', message, cause, timeoutMs }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        ...corsHeaders,
+    return new Response(
+      JSON.stringify({ error: 'Proxy request failed', message, cause, timeoutMs }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders,
+        },
       },
-    })
+    )
   }
+}
+
+function rewriteM3u8Urls(text: string, baseUrl: string, proxyPrefix = '') {
+  if (!text || !text.includes('#EXTM3U')) return text
+  const resolve = (uri: string) => {
+    try {
+      const absolute = new URL(uri, baseUrl)
+      return proxyPrefix && /^https?:$/.test(absolute.protocol)
+        ? proxyPrefix + encodeURIComponent(absolute.href)
+        : absolute.href
+    } catch {
+      return uri
+    }
+  }
+  return text
+    .split('\n')
+    .map(line => {
+      const trimmed = line.trim()
+      if (!trimmed) return line
+      if (trimmed.startsWith('#')) {
+        return line.replace(/URI="([^"]+)"/g, (_match, uri) => `URI="${resolve(uri)}"`)
+      }
+      return resolve(trimmed)
+    })
+    .join('\n')
 }

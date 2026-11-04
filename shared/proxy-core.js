@@ -86,39 +86,27 @@ export function isM3u8Response(targetUrl, contentType = '') {
   )
 }
 
-export function rewriteM3u8Urls(text, baseUrl) {
+export function rewriteM3u8Urls(text, baseUrl, proxyPrefix = '') {
   if (!text || !text.includes('#EXTM3U')) return text
-  const lines = text.split('\n')
-  const rewritten = lines.map(line => {
-    const trimmed = line.trim()
-    if (!trimmed) return line
-
-    // 处理包含 URI="..." 的所有 HLS 标签（如 EXT-X-KEY, EXT-X-MAP, EXT-X-MEDIA 等）
-    if (trimmed.startsWith('#') && trimmed.includes('URI="')) {
-      return line.replace(/URI="([^"]+)"/g, (match, uri) => {
-        if (!uri.startsWith('http://') && !uri.startsWith('https://')) {
-          try {
-            return `URI="${new URL(uri, baseUrl).href}"`
-          } catch {
-            return match
-          }
-        }
-        return match
-      })
+  const resolve = uri => {
+    try {
+      const absolute = new URL(uri, baseUrl)
+      return proxyPrefix && /^https?:$/.test(absolute.protocol)
+        ? proxyPrefix + encodeURIComponent(absolute.href)
+        : absolute.href
+    } catch {
+      return uri
     }
-
-    if (
-      !trimmed.startsWith('#') &&
-      !trimmed.startsWith('http://') &&
-      !trimmed.startsWith('https://')
-    ) {
-      try {
-        return new URL(trimmed, baseUrl).href
-      } catch {
-        return line
+  }
+  return text
+    .split('\n')
+    .map(line => {
+      const trimmed = line.trim()
+      if (!trimmed) return line
+      if (trimmed.startsWith('#')) {
+        return line.replace(/URI="([^"]+)"/g, (_match, uri) => `URI="${resolve(uri)}"`)
       }
-    }
-    return line
-  })
-  return rewritten.join('\n')
+      return resolve(trimmed)
+    })
+    .join('\n')
 }

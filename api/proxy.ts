@@ -32,8 +32,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     res.setHeader('Cache-Control', 'public, max-age=60')
 
     if (isM3u8Response(targetUrl, contentType) && response.status === 200) {
+      res.setHeader('Cache-Control', 'no-store')
       let text = await response.text()
-      text = rewriteM3u8Urls(text, response.url || targetUrl)
+      text = rewriteM3u8Urls(
+        text,
+        response.url || targetUrl,
+        req.query.native === '1' ? '/proxy?native=1&url=' : '',
+      )
       return res.status(response.status).send(text)
     }
 

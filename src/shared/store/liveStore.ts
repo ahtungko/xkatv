@@ -40,7 +40,6 @@ function getActiveChannelsFromSubs(subscriptions: LiveSubscription[]): LiveChann
     )
 }
 
-
 async function fetchM3uContent(url: string, proxyUrl?: string): Promise<string> {
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
   const isHttpTarget = url.startsWith('http://')
@@ -97,6 +96,10 @@ export const useLiveStore = create<LiveState>()(
           const existing = urlMap.get(envSub.url) || idMap.get(envSub.id)
           if (!existing) {
             merged.push(envSub)
+            hasNew = true
+          } else if (existing.url !== envSub.url) {
+            const index = merged.indexOf(existing)
+            merged[index] = { ...existing, url: envSub.url, channels: [], channelCount: 0 }
             hasNew = true
           }
         }
@@ -231,7 +234,9 @@ export const useLiveStore = create<LiveState>()(
             return {
               subscriptions: updatedSubs,
               cachedChannels: newCached,
-              activeChannel: shouldResetActive ? newCached[0] || null : state.activeChannel,
+              activeChannel: shouldResetActive
+                ? newCached[0] || null
+                : newCached.find(c => c.id === state.activeChannel?.id) || null,
               isLoading: false,
             }
           })
@@ -302,7 +307,9 @@ export const useLiveStore = create<LiveState>()(
           return {
             subscriptions: latestSubs,
             cachedChannels: newCached,
-            activeChannel: shouldResetActive ? newCached[0] || null : state.activeChannel,
+            activeChannel: shouldResetActive
+              ? newCached[0] || null
+              : newCached.find(c => c.id === state.activeChannel?.id) || null,
             isLoading: false,
           }
         })

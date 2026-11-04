@@ -214,3 +214,47 @@ http://stream.example/cctv1.m3u8`
     expect(state.isLoading).toBe(false)
   })
 })
+
+it('updates an environment source URL with the same generated ID', async () => {
+  const old = { id: 'env_live_0', name: 'Env', url: 'https://old.test/list', isEnabled: true }
+  useLiveStore.setState({ subscriptions: [old], cachedChannels: [], activeChannel: null })
+  vi.stubGlobal('__XKA_RUNTIME_CONFIG__', {
+    XKA_INITIAL_LIVE_SUBSCRIPTIONS: 'https://new.test/list',
+  })
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValue({
+      ok: true,
+      text: async () => '#EXTM3U\n#EXTINF:-1,C1\nhttps://new.test/live.m3u8',
+    })
+  vi.stubGlobal('fetch', fetchMock)
+  await useLiveStore.getState().initializeEnvSubscriptions()
+  expect(useLiveStore.getState().subscriptions[0].url).toBe('https://new.test/list')
+  expect(fetchMock).toHaveBeenCalledWith('https://new.test/list')
+  vi.unstubAllGlobals()
+})
+it.each(['refreshSubscription', 'refreshAllSubscriptions'] as const)(
+  'updates the active URL during %s',
+  async action => {
+    const channel = { id: 'sub_ch_0_C1', name: 'C1', group: '', url: 'https://old.test/live' }
+    useLiveStore.setState({
+      subscriptions: [
+        { id: 'sub', name: 'Sub', url: 'https://list.test', isEnabled: true, channels: [channel] },
+      ],
+      cachedChannels: [channel],
+      activeChannel: channel,
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({
+          ok: true,
+          text: async () => '#EXTM3U\n#EXTINF:-1,C1\nhttps://new.test/live',
+        }),
+    )
+    await useLiveStore.getState()[action]('sub')
+    expect(useLiveStore.getState().activeChannel?.url).toBe('https://new.test/live')
+    vi.unstubAllGlobals()
+  },
+)
