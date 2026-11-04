@@ -38,6 +38,7 @@ export interface SettingsConfig {
     tmdbImageBaseUrl?: string
     isUpdateLogEnabled?: boolean
     isScrollChromeAnimationEnabled?: boolean
+    isLiveStreamEnabled?: boolean
     tmdbLanguage?: string
     tmdbImageQuality?: 'low' | 'medium' | 'high'
   }
@@ -84,6 +85,7 @@ export interface ExportedConfig {
   videoSources?: VideoSourceConfig[] | string
   subscriptions?: SubscriptionConfig[]
   liveSubscriptions?: LiveSubscriptionConfig[]
+  liveEnabled?: boolean
   adFilteringEnabled?: boolean
   meta?: MetaConfig
 }

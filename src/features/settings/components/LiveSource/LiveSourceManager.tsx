@@ -1,3 +1,4 @@
+import { useAuthStore } from '@/shared/store/authStore'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Tv, RefreshCw, Trash2, Plus, AlertCircle, Loader2 } from 'lucide-react'
@@ -17,6 +18,8 @@ import {
 import { SettingsSection } from '../common'
 import { ConfirmModal } from '@/shared/components/common/ConfirmModal'
 import { useLiveStore } from '@/shared/store/liveStore'
+import { useSettingStore } from '@/shared/store/settingStore'
+import { setGlobalLiveStreamEnabled } from '@/features/live/services/liveSettingService'
 import type { LiveSubscription } from '@/shared/types/live'
 import { cn } from '@/shared/lib'
 import dayjs from 'dayjs'
@@ -129,7 +132,7 @@ function LiveSubscriptionCard({ subscription }: { subscription: LiveSubscription
   }
 
   return (
-    <div className="flex flex-col justify-between gap-3 rounded-lg border border-border/50 bg-card p-4 transition-colors md:flex-row md:items-center">
+    <div className="border-border/50 bg-card flex flex-col justify-between gap-3 rounded-lg border p-4 transition-colors md:flex-row md:items-center">
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2">
           <Tv className="size-4 text-red-500" />
@@ -143,9 +146,9 @@ function LiveSubscriptionCard({ subscription }: { subscription: LiveSubscription
             </Badge>
           )}
         </div>
-        <p className="truncate text-xs text-muted-foreground">{subscription.url}</p>
+        <p className="text-muted-foreground truncate text-xs">{subscription.url}</p>
         {subscription.updatedAt && (
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-muted-foreground text-[10px]">
             更新时间：{dayjs(subscription.updatedAt).format('YYYY-MM-DD HH:mm')}
           </p>
         )}
@@ -172,7 +175,7 @@ function LiveSubscriptionCard({ subscription }: { subscription: LiveSubscription
         <Button
           variant="ghost"
           size="icon"
-          className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive size-8"
           onClick={() => setIsDeleteOpen(true)}
           title="删除"
         >
@@ -194,9 +197,24 @@ function LiveSubscriptionCard({ subscription }: { subscription: LiveSubscription
 }
 
 export default function LiveSourceManager() {
+  const isAdmin = useAuthStore(state => state.account?.role === 'admin')
   const { subscriptions, refreshAllSubscriptions, isLoading } = useLiveStore()
+  const isLiveStreamEnabled = useSettingStore(state => state.system.isLiveStreamEnabled)
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [isRefreshingAll, setIsRefreshingAll] = useState(false)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+
+  const handleToggleLiveStatus = async (checked: boolean) => {
+    setIsUpdatingStatus(true)
+    try {
+      await setGlobalLiveStreamEnabled(checked)
+      toast.success(checked ? '已开启全站电视直播' : '已关闭全站电视直播（普通用户不可见）')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : '更新电视直播状态失败')
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
 
   const handleRefreshAll = async () => {
     setIsRefreshingAll(true)
@@ -212,6 +230,36 @@ export default function LiveSourceManager() {
 
   return (
     <>
+      {isAdmin && (
+        <SettingsSection
+          title="电视直播功能控制"
+          description="管理全站用户的电视直播访问权限。"
+          tone="amber"
+        >
+          <div className="border-border/50 bg-card flex flex-col justify-between gap-3 rounded-lg border p-4 md:flex-row md:items-center">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold">全站电视直播</span>
+                <Badge
+                  variant={isLiveStreamEnabled ? 'default' : 'secondary'}
+                  className="text-[10px]"
+                >
+                  {isLiveStreamEnabled ? '全员开放' : '已对普通用户关闭'}
+                </Badge>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                关闭后，普通用户的导航栏将隐藏「直播」入口，直接访问将显示未开放提示；管理员账号仍可进入预览。
+              </p>
+            </div>
+            <Switch
+              checked={isLiveStreamEnabled}
+              disabled={isUpdatingStatus}
+              onCheckedChange={handleToggleLiveStatus}
+              aria-label="开启或关闭全站电视直播"
+            />
+          </div>
+        </SettingsSection>
+      )}
       <SettingsSection
         title="电视直播源 (IPTV M3U)"
         description="配置 M3U/M3U8 直播源订阅，频道将自动归纳至主站「电视直播」专区。"
@@ -234,7 +282,7 @@ export default function LiveSourceManager() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 px-3 text-xs gap-1"
+              className="h-8 gap-1 px-3 text-xs"
               onClick={() => setAddModalOpen(true)}
             >
               <Plus className="size-3.5" />
@@ -244,10 +292,10 @@ export default function LiveSourceManager() {
         }
       >
         {subscriptions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/60 py-8 text-center">
-            <AlertCircle className="mb-2 size-8 text-muted-foreground/60" />
-            <p className="text-sm font-medium text-muted-foreground">暂无电视直播源订阅</p>
-            <p className="text-xs text-muted-foreground/75 mt-0.5 max-w-sm">
+          <div className="border-border/60 flex flex-col items-center justify-center rounded-lg border border-dashed py-8 text-center">
+            <AlertCircle className="text-muted-foreground/60 mb-2 size-8" />
+            <p className="text-muted-foreground text-sm font-medium">暂无电视直播源订阅</p>
+            <p className="text-muted-foreground/75 mt-0.5 max-w-sm text-xs">
               点击右上角「添加直播源」填入在线 M3U/TXT 订阅地址，即可在大屏与网页端观看电视直播。
             </p>
           </div>

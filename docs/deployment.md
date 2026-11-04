@@ -4,6 +4,13 @@
 
 ---
 
+## 直播功能升级
+
+1. 新项目先执行 `supabase/schema.sql`；已有项目保留现有数据。两种情况均需再执行 [202611040001_site_settings.sql](../supabase/migrations/202611040001_site_settings.sql)，当前整合脚本尚未包含它。
+2. 按 [直播配置](configuration.md#电视直播配置) 设置订阅、代理和初始开关，再部署应用。迁移不会预置开启状态，也不会覆盖已有数据库开关。
+3. 使用外部直播 Worker 时，同步部署 [最新版 Worker](../workers/live-stream-proxy/index.js)，否则原生 HLS 的递归代理参数无法生效。
+4. 刷新设备页面，用管理员开关修改状态，并在另一台设备确认导航与直播页面同步变化。
+
 ## Docker 部署
 
 ### 方式一：Docker Compose（推荐）

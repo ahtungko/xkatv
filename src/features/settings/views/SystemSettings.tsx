@@ -1,3 +1,4 @@
+import { useAuthStore } from '@/shared/store/authStore'
 import NetworkSettings from '../components/NetworkSettings'
 import SearchSettings from '../components/SearchSettings'
 import ThemeSettings from '../components/ThemeSettings'
@@ -14,8 +15,11 @@ import {
 import { Cog, Image, KeyRound, Link2 } from 'lucide-react'
 import { SettingsItem, SettingsPageShell, SettingsSection } from '../components/common'
 import { getPublicEnv } from '@/shared/config/runtimeEnv'
+import { setGlobalLiveStreamEnabled } from '@/features/live/services/liveSettingService'
+import { toast } from 'sonner'
 
 export default function SystemSettings() {
+  const isAdmin = useAuthStore(state => state.account?.role === 'admin')
   const { system, setSystemSettings } = useSettingStore()
 
   const hasEnvToken = Boolean(getPublicEnv('XKA_TMDB_API_TOKEN'))
@@ -52,6 +56,26 @@ export default function SystemSettings() {
             />
           }
         />
+        {isAdmin && (
+          <SettingsItem
+            title="电视直播专区"
+            description="控制全站用户是否开放电视直播功能。此设置将同步给所有用户。"
+            controlClassName="self-end mt-1"
+            control={
+              <Switch
+                checked={system.isLiveStreamEnabled}
+                onCheckedChange={async checked => {
+                  try {
+                    await setGlobalLiveStreamEnabled(checked)
+                    toast.success(checked ? '已开启全站电视直播' : '已关闭全站电视直播')
+                  } catch (e: unknown) {
+                    toast.error(e instanceof Error ? e.message : '更新状态失败')
+                  }
+                }}
+              />
+            }
+          />
+        )}
         <SettingsItem
           title="滚动收起导航动画"
           description={

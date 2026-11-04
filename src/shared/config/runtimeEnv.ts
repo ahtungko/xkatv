@@ -10,6 +10,7 @@ export const PUBLIC_ENV_KEYS = [
   'XKA_INITIAL_CONFIG',
   'XKA_INITIAL_LIVE_SUBSCRIPTIONS',
   'XKA_LIVE_PROXY_URL',
+  'XKA_LIVE_ENABLED',
 ] as const
 
 export const LEGACY_PUBLIC_ENV_KEYS = [] as const

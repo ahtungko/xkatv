@@ -275,4 +275,46 @@ describe('settingStore migrate', () => {
     expect(migrated.playback.isFullscreenProgressHidden).toBe(true)
   })
 
+  it('v15 -> v16 会补齐 isLiveStreamEnabled 默认值', async () => {
+    const migrate = useSettingStore.persist.getOptions().migrate
+
+    const legacyState = {
+      network: DEFAULT_SETTINGS.network,
+      search: DEFAULT_SETTINGS.search,
+      playback: DEFAULT_SETTINGS.playback,
+      system: {
+        ...DEFAULT_SETTINGS.system,
+      },
+    }
+    delete (legacyState.system as Record<string, unknown>).isLiveStreamEnabled
+
+    const migrated = (await Promise.resolve(migrate?.(legacyState, 15))) as {
+      system: { isLiveStreamEnabled?: boolean }
+    }
+
+    expect(migrated.system.isLiveStreamEnabled).toBe(
+      DEFAULT_SETTINGS.system.isLiveStreamEnabled,
+    )
+  })
+
+  it('已有 isLiveStreamEnabled 时不覆盖', async () => {
+    const migrate = useSettingStore.persist.getOptions().migrate
+
+    const legacyState = {
+      network: DEFAULT_SETTINGS.network,
+      search: DEFAULT_SETTINGS.search,
+      playback: DEFAULT_SETTINGS.playback,
+      system: {
+        ...DEFAULT_SETTINGS.system,
+        isLiveStreamEnabled: false,
+      },
+    }
+
+    const migrated = (await Promise.resolve(migrate?.(legacyState, 15))) as {
+      system: { isLiveStreamEnabled?: boolean }
+    }
+
+    expect(migrated.system.isLiveStreamEnabled).toBe(false)
+  })
+
 })

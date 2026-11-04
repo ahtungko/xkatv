@@ -1,12 +1,15 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router'
-import { Tv, Search, RefreshCw, Radio, ExternalLink, ShieldCheck } from 'lucide-react'
+import { Tv, Search, RefreshCw, Radio, ExternalLink, ShieldCheck, AlertTriangle } from 'lucide-react'
 import { Input } from '@/shared/components/ui/input'
 import { Button } from '@/shared/components/ui/button'
 import { Badge } from '@/shared/components/ui/badge'
+import { Switch } from '@/shared/components/ui/switch'
 import { ScrollArea } from '@/shared/components/ui/scroll-area'
 import { useLiveStore } from '@/shared/store/liveStore'
 import { useAuthStore } from '@/shared/store/authStore'
+import { useSettingStore } from '@/shared/store/settingStore'
+import { setGlobalLiveStreamEnabled } from '../services/liveSettingService'
 import { LivePlayer } from '../components/LivePlayer'
 import { cn } from '@/shared/lib'
 import { toast } from 'sonner'
@@ -21,8 +24,10 @@ export default function LiveView() {
   } = useLiveStore()
 
   const isAdmin = useAuthStore(state => state.account?.role === 'admin')
+  const isLiveStreamEnabled = useSettingStore(state => state.system.isLiveStreamEnabled)
   const [selectedGroup, setSelectedGroup] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [isTogglingGlobal, setIsTogglingGlobal] = useState(false)
 
   // Dynamically extract categories from cached channels
   const groups = useMemo(() => {
@@ -77,8 +82,57 @@ export default function LiveView() {
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
   const isChannelHttp = activeChannel?.url.startsWith('http://')
 
+  const handleToggleGlobal = async (checked: boolean) => {
+    setIsTogglingGlobal(true)
+    try {
+      await setGlobalLiveStreamEnabled(checked)
+      toast.success(checked ? '已开启全站电视直播' : '已关闭全站电视直播（普通用户不可见）')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : '更新状态失败')
+    } finally {
+      setIsTogglingGlobal(false)
+    }
+  }
+
+  // 非管理员在直播关闭时显示友好提示
+  if (!isLiveStreamEnabled && !isAdmin) {
+    return (
+      <div className="flex h-[calc(100vh-4rem)] flex-col items-center justify-center p-8 text-center bg-background">
+        <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground">
+          <Tv className="size-8" />
+        </div>
+        <h2 className="text-xl font-semibold">电视直播暂未开放</h2>
+        <p className="text-muted-foreground mt-2 max-w-sm text-sm">
+          全站电视直播功能已由管理员暂时关闭，请稍后再来。
+        </p>
+        <Button asChild className="mt-6" variant="default">
+          <Link to="/">返回首页</Link>
+        </Button>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-background">
+      {/* Admin Closed Banner */}
+      {!isLiveStreamEnabled && isAdmin && (
+        <div className="flex shrink-0 items-center justify-between border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs text-amber-500">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="size-4 shrink-0" />
+            <span>全站电视直播当前已对普通用户关闭（仅管理员可见预览）。</span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isTogglingGlobal}
+            className="h-6 border-amber-500/30 px-2 text-xs text-amber-500 hover:bg-amber-500/20"
+            onClick={() => handleToggleGlobal(true)}
+          >
+            一键对全员开放
+          </Button>
+        </div>
+      )}
+
       {/* Top Bar */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/40 px-4 lg:px-6">
         <div className="flex items-center gap-2">
@@ -86,7 +140,14 @@ export default function LiveView() {
             <Tv className="size-4" />
           </div>
           <div>
-            <h1 className="text-base font-semibold leading-none tracking-tight">电视直播</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-semibold leading-none tracking-tight">电视直播</h1>
+              {!isLiveStreamEnabled && isAdmin && (
+                <Badge variant="secondary" className="text-[10px] text-amber-500 border-amber-500/30">
+                  仅管理员可见
+                </Badge>
+              )}
+            </div>
             <p className="text-muted-foreground mt-0.5 text-xs">
               共 {cachedChannels.length} 个可用频道
             </p>
@@ -94,6 +155,18 @@ export default function LiveView() {
         </div>
 
         <div className="flex items-center gap-2">
+          {isAdmin && (
+            <div className="flex items-center gap-1.5 rounded-lg border border-border/40 bg-muted/30 px-2 py-1 text-xs mr-1">
+              <span className="text-muted-foreground hidden sm:inline">全站开关</span>
+              <Switch
+                checked={isLiveStreamEnabled}
+                disabled={isTogglingGlobal}
+                onCheckedChange={handleToggleGlobal}
+                aria-label="全站电视直播开关"
+              />
+            </div>
+          )}
+
           <Button
             variant="outline"
             size="sm"

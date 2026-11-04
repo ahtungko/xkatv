@@ -20,6 +20,28 @@ xkaTV 支持通过环境变量预定义应用的默认配置。当用户点击 *
 | `XKA_DISABLE_ANALYTICS`     | 否   | 设为 `true` 禁用 Vercel Analytics（Docker 等非 Vercel 部署建议设为 `true`） |
 | `XKA_INITIAL_CONFIG`        | 否   | 完整 JSON 配置（包含设置、视频源、订阅等导出数据）                          |
 
+### 电视直播配置
+
+| 变量 | 说明 |
+| --- | --- |
+| `XKA_INITIAL_LIVE_SUBSCRIPTIONS` | 初始直播订阅 JSON 数组，或逗号/换行分隔的播放列表 URL |
+| `XKA_LIVE_PROXY_URL` | 直播专用代理，可用逗号分隔多个端点 |
+| `XKA_LIVE_ENABLED` | 初始直播开关，设为小写 `false` 关闭；未设置时默认开启 |
+
+```env
+XKA_INITIAL_LIVE_SUBSCRIPTIONS='[{"id":"main-live","name":"示例直播源","url":"https://example.com/live.m3u","isEnabled":true}]'
+XKA_LIVE_PROXY_URL=https://proxy.example.com?url=
+XKA_LIVE_ENABLED=false
+```
+
+也可在 `XKA_INITIAL_CONFIG` 中设置 `liveSubscriptions`、`liveEnabled`、`settings.system.isLiveStreamEnabled` 和 `settings.network.liveProxyUrl`。直播订阅会与独立变量中的订阅合并并按 URL 去重，建议给每个源指定稳定且唯一的 ID。
+
+初始开关优先级为 `settings.system.isLiveStreamEnabled` → `liveEnabled` → `XKA_LIVE_ENABLED` → 默认开启。已有浏览器设置会持久化，修改环境变量不等同于立即修改所有用户的开关。全站控制请使用管理员开关：成功保存到数据库后，各客户端通过首次读取和 Realtime 更新状态。数据库没有记录时保留客户端现有值；迁移不会强制开启直播。
+
+直播代理实际选择顺序为本机 `network.liveProxyUrl` → `XKA_LIVE_PROXY_URL` → 影视源代理 `network.proxyUrl`。初次初始化时，`settings.network.liveProxyUrl` 优先于独立环境变量。
+
+启用全站开关前执行 [站点设置迁移](../supabase/migrations/202611040001_site_settings.sql)，详见 [数据库配置](cloud-sync.md#global-live-stream-setting)。原生 HLS 播放需要同时更新应用与代理，详见 [Worker 部署](../workers/live-stream-proxy/README.md)。
+
 ### 默认视频源（`XKA_INITIAL_VIDEO_SOURCES`）
 
 支持两种格式：

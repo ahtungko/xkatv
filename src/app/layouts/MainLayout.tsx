@@ -21,6 +21,7 @@ import { getInitialContentConfigId } from '@/shared/config/runtimeEnv'
 import { useSeriesUpdateChecker } from '@/features/favorites/hooks/useSeriesUpdateChecker'
 import { GlobalWatchPartyPill } from '@/features/player/components'
 import { useWatchPartyStore } from '@/features/player/store/watchPartyStore'
+import { initLiveSettingSync } from '@/features/live/services/liveSettingService'
 
 export default function MainLayout() {
   const hasNewVersion = useVersionStore(state => state.hasNewVersion)
@@ -52,6 +53,11 @@ export default function MainLayout() {
   useEffect(() => {
     void restoreHostSessionIfNeeded()
   }, [restoreHostSessionIfNeeded])
+
+  // 全局电视直播功能状态同步（跨标签页与 Supabase）
+  useEffect(() => {
+    return initLiveSettingSync()
+  }, [])
 
   // 初始化逻辑 (从 MyRouter 迁移)
   useEffect(() => {

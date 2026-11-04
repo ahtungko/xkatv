@@ -3,6 +3,8 @@ import { Home, Compass, Bookmark, History, Tv } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { cn } from '@/shared/lib'
 import { usePrivateModeStore } from '@/shared/store'
+import { useAuthStore } from '@/shared/store/authStore'
+import { useSettingStore } from '@/shared/store/settingStore'
 
 const tabs = [
   { title: '首页', path: '/', icon: Home },
@@ -15,13 +17,19 @@ const tabs = [
 export default function MobileTabBar() {
   const location = useLocation()
   const isPrivateMode = usePrivateModeStore(state => state.isPrivateMode)
+  const isLiveStreamEnabled = useSettingStore(state => state.system.isLiveStreamEnabled)
+  const isAdmin = useAuthStore(state => state.account?.role === 'admin')
 
   // Hide mobile tab bar on player page to maximize screen space
   if (location.pathname.startsWith('/play/')) {
     return null
   }
 
-  const visibleTabs = isPrivateMode ? tabs.filter(tab => tab.path !== '/history' && tab.path !== '/favorites') : tabs
+  const visibleTabs = tabs.filter(tab => {
+    if (isPrivateMode && (tab.path === '/history' || tab.path === '/favorites')) return false
+    if (tab.path === '/live' && !isLiveStreamEnabled && !isAdmin) return false
+    return true
+  })
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 h-16 border-t border-border/40 bg-background/85 backdrop-blur-2xl md:hidden">

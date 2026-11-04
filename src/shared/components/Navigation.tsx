@@ -12,6 +12,8 @@ import SearchBox from './SearchBox'
 import AccountMenu from './AccountMenu'
 import { PrivateModeToggle } from './PrivateModeToggle'
 import { usePrivateModeStore } from '@/shared/store'
+import { useAuthStore } from '@/shared/store/authStore'
+import { useSettingStore } from '@/shared/store/settingStore'
 import { cn } from '@/shared/lib'
 import { AnnouncementCenter } from '@/features/announcements/AnnouncementCenter'
 import { useVersionStore } from '@/shared/store/versionStore'
@@ -41,7 +43,14 @@ export default function Navigation({
   // 在搜索页面隐藏导航栏搜索框
   const isSearchPage = location.pathname === '/search'
   const isPrivateMode = usePrivateModeStore(state => state.isPrivateMode)
-  const visibleNavLinks = isPrivateMode ? navLinks.filter(link => link.path !== '/history' && link.path !== '/favorites') : navLinks
+  const isLiveStreamEnabled = useSettingStore(state => state.system.isLiveStreamEnabled)
+  const isAdmin = useAuthStore(state => state.account?.role === 'admin')
+
+  const visibleNavLinks = navLinks.filter(link => {
+    if (isPrivateMode && (link.path === '/history' || link.path === '/favorites')) return false
+    if (link.path === '/live' && !isLiveStreamEnabled && !isAdmin) return false
+    return true
+  })
 
   return (
     <div

@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 import { XkaLogo } from '@/shared/components/icons'
 import { useVersionStore, usePrivateModeStore } from '../store'
 import { useAuthStore } from '@/shared/store/authStore'
+import { useSettingStore } from '@/shared/store/settingStore'
 import { cn } from '@/shared/lib'
 import { PROJECT } from '@/shared/config/project'
 
@@ -38,6 +39,7 @@ export default function SideBar({
   const location = useLocation()
   const { isMobile, setOpenMobile } = useSidebar()
   const isAdmin = useAuthStore(state => state.account?.role === 'admin')
+  const isLiveStreamEnabled = useSettingStore(state => state.system.isLiveStreamEnabled)
   const isPrivateMode = usePrivateModeStore(state => state.isPrivateMode)
   const togglePrivateMode = usePrivateModeStore(state => state.togglePrivateMode)
 
@@ -122,7 +124,13 @@ export default function SideBar({
           <SidebarGroupLabel>导航</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.content.filter(item => !isPrivateMode || (item.url !== '/history' && item.url !== '/favorites')).map(item => (
+              {items.content
+                .filter(item => {
+                  if (isPrivateMode && (item.url === '/history' || item.url === '/favorites')) return false
+                  if (item.url === '/live' && !isLiveStreamEnabled && !isAdmin) return false
+                  return true
+                })
+                .map(item => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink

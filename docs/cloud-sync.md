@@ -7,6 +7,7 @@ An administrator creates usernames and passwords. Users sign in once and their f
 1. Install Supabase through Vercel Marketplace, create a project, and connect it to this app. Choose a region near your users. Set **Public Environment Variables Prefix** to `XKA_`; leave **Custom Prefix** empty/default. Check the resulting variable names.
 2. Open the connected Supabase dashboard → SQL Editor and run the consolidated schema file **once**:
    - [Consolidated Schema](../supabase/schema.sql) — Initializes all database tables, security policies (RLS), triggers, and stored procedures in one single run.
+   After the consolidated schema, also run [202611040001_site_settings.sql](../supabase/migrations/202611040001_site_settings.sql) for the global live-stream flag; it is not yet included in `schema.sql`.
    *(Note: The individual historical migrations under `supabase/migrations/` remain available for automated tests and incremental inspection).*
 3. Under Supabase Authentication, keep the email/password provider enabled but **disable Allow new users to sign up**. Keep multiple simultaneous sessions allowed. The application uses internal, automatically confirmed email-shaped identifiers for Supabase Auth; users only enter usernames, and no mailbox or SMTP is needed. The database trigger also rejects accounts not provisioned by the server admin API.
 4. Configure the Vercel project variables:
@@ -148,3 +149,15 @@ The build runs `pnpm check:api-types` to check API routes with Vercel-style depe
 Automated tests exercise authorization failures, admin operations, account transitions, offline queues and merge conflicts. Live Supabase policy enforcement and the two-device flow still need verification with your configured project.
 
 References: [Supabase admin user creation](https://supabase.com/docs/reference/javascript/auth-admin-createuser), [sessions](https://supabase.com/docs/guides/auth/sessions), [row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security).
+
+## Global live-stream setting
+
+For an existing installation, run [202611040001_site_settings.sql](../supabase/migrations/202611040001_site_settings.sql) after the existing account migrations. Fresh installations also need this step after `schema.sql`. Then deploy the frontend and refresh open tabs.
+
+The migration creates `site_settings`, read/write RPCs, and RLS policies. Visitors and users can read flags; only active administrators can write them. It adds the table to `supabase_realtime` when that publication exists and sets `REPLICA IDENTITY FULL`. The script can be rerun without overwriting saved values. On a database without that publication, the publication step is skipped; cross-device change delivery requires Supabase Realtime to be configured.
+
+No default `is_live_enabled` row is inserted. Until an administrator saves a value, a missing database value leaves the client's persisted or initial environment setting unchanged. Once saved, the database flag takes precedence; changing an environment variable does not overwrite it. Failed remote saves do not change local state or broadcast a successful update.
+
+Administrators can toggle the flag on the live page, source settings, or system settings. Other users lose the navigation entry and see a closed message when visiting `/live`; administrators retain preview access. This controls the app UI, not third-party stream URLs already known to a user. Subscription lists and channel caches remain local; this migration synchronizes the global flag only.
+
+If using an external live Worker, redeploy its latest script along with the app for native HLS support. See [Worker deployment](../workers/live-stream-proxy/README.md).

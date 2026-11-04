@@ -52,6 +52,9 @@ export const DEFAULT_SETTINGS = {
       DEFAULT_TMDB_IMAGE_BASE_URL,
     isUpdateLogEnabled: envSettings?.system?.isUpdateLogEnabled ?? false,
     isScrollChromeAnimationEnabled: envSettings?.system?.isScrollChromeAnimationEnabled ?? false,
+    isLiveStreamEnabled:
+      envSettings?.system?.isLiveStreamEnabled ??
+      (INITIAL_CONFIG?.liveEnabled ?? (getPublicEnv('XKA_LIVE_ENABLED') !== 'false')),
     tmdbLanguage: envSettings?.system?.tmdbLanguage ?? 'zh-CN',
     tmdbImageQuality: (envSettings?.system?.tmdbImageQuality ?? 'medium') as
       | 'low'

@@ -44,6 +44,7 @@ interface SystemSettings {
   tmdbImageBaseUrl: string
   isUpdateLogEnabled: boolean
   isScrollChromeAnimationEnabled: boolean
+  isLiveStreamEnabled: boolean
   tmdbLanguage: string
   tmdbImageQuality: 'low' | 'medium' | 'high'
 }
@@ -127,7 +128,7 @@ export const useSettingStore = create<SettingStore>()(
       })),
       {
         name: 'xkatv-setting-store',
-        version: 15,
+        version: 16,
         migrate: (persistedState: unknown, version: number) => {
           const state = persistedState as Record<string, unknown>
           if (version < 2 && state.playback) {
@@ -222,6 +223,11 @@ export const useSettingStore = create<SettingStore>()(
             const network = (state.network ?? {}) as Record<string, unknown>
             network.liveProxyUrl ??= DEFAULT_SETTINGS.network.liveProxyUrl ?? ''
             state.network = network
+          }
+          if (version < 16) {
+            const system = (state.system ?? {}) as Record<string, unknown>
+            system.isLiveStreamEnabled ??= DEFAULT_SETTINGS.system.isLiveStreamEnabled
+            state.system = system
           }
           return state
         },
