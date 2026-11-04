@@ -50,4 +50,17 @@ describe('getPublicEnv', () => {
 
     expect(getInitialContentConfigId()).not.toBe(firstId)
   })
+
+  it('初始直播源环境变量变化时生成不同配置标识', () => {
+    runtimeGlobal.__XKA_RUNTIME_CONFIG__ = {
+      XKA_INITIAL_LIVE_SUBSCRIPTIONS: '[{"name":"直播一"}]',
+    }
+    const firstId = getInitialContentConfigId()
+
+    runtimeGlobal.__XKA_RUNTIME_CONFIG__ = {
+      XKA_INITIAL_LIVE_SUBSCRIPTIONS: '[{"name":"直播二"}]',
+    }
+
+    expect(getInitialContentConfigId()).not.toBe(firstId)
+  })
 })

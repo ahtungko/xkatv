@@ -12,6 +12,7 @@ import { useVersionStore } from '@/shared/store/versionStore'
 import { useSettingStore } from '@/shared/store/settingStore'
 import { useApiStore } from '@/shared/store/apiStore'
 import { useSubscriptionStore } from '@/shared/store/subscriptionStore'
+import { useLiveStore } from '@/shared/store/liveStore'
 import { useSubscriptionAutoRefresh } from '@/shared/hooks/useSubscriptionAutoRefresh'
 import { useEnvSourcesAutoRefresh } from '@/shared/hooks/useEnvSourcesAutoRefresh'
 import { useScrollChromeVisibility } from '@/shared/hooks'
@@ -30,6 +31,7 @@ export default function MainLayout() {
   )
   const initializeEnvSources = useApiStore(state => state.initializeEnvSources)
   const initializeEnvSubscriptions = useSubscriptionStore(state => state.initializeEnvSubscriptions)
+  const initializeEnvLiveSubscriptions = useLiveStore(state => state.initializeEnvSubscriptions)
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isChromeVisible = useScrollChromeVisibility({
@@ -60,11 +62,14 @@ export default function MainLayout() {
       await initializeEnvSources()
       if (needsInitialization) {
         await initializeEnvSubscriptions()
+        await initializeEnvLiveSubscriptions()
         localStorage.setItem('initialContentConfigId', initialContentConfigId)
+      } else if (useLiveStore.getState().cachedChannels.length === 0) {
+        await initializeEnvLiveSubscriptions()
       }
     }
     void initialize()
-  }, [initializeEnvSources, initializeEnvSubscriptions])
+  }, [initializeEnvSources, initializeEnvSubscriptions, initializeEnvLiveSubscriptions])
 
   // 版本更新检查
   useEffect(() => {

@@ -22,6 +22,7 @@ interface LiveState {
   deleteSubscription: (id: string) => void
   refreshSubscription: (id: string) => Promise<void>
   refreshAllSubscriptions: () => Promise<void>
+  initializeEnvSubscriptions: () => Promise<void>
   setActiveChannel: (channel: LiveChannel | null) => void
   setSelectedCategory: (category: string) => void
   setSearchKeyword: (keyword: string) => void
@@ -83,6 +84,41 @@ export const useLiveStore = create<LiveState>()(
           subscriptions,
           cachedChannels: getActiveChannelsFromSubs(subscriptions),
         })
+      },
+
+      initializeEnvSubscriptions: async () => {
+        const envSubs = parseInitialLiveSubscriptions()
+        if (envSubs.length === 0) return
+
+        const currentSubs = get().subscriptions
+        const urlMap = new Map(currentSubs.map(s => [s.url, s]))
+        const idMap = new Map(currentSubs.map(s => [s.id, s]))
+
+        const merged = [...currentSubs]
+        let hasNew = false
+
+        for (const envSub of envSubs) {
+          const existing = urlMap.get(envSub.url) || idMap.get(envSub.id)
+          if (!existing) {
+            merged.push(envSub)
+            hasNew = true
+          }
+        }
+
+        if (currentSubs.length === 0 || hasNew) {
+          set({
+            subscriptions: merged,
+            cachedChannels: getActiveChannelsFromSubs(merged),
+          })
+        }
+
+        if (get().cachedChannels.length === 0 || hasNew) {
+          try {
+            await get().refreshAllSubscriptions()
+          } catch (err) {
+            console.warn('[LiveStore] 初始化环境直播源拉取失败:', err)
+          }
+        }
       },
 
       addSubscription: async subData => {

@@ -66,6 +66,14 @@ export interface SubscriptionConfig {
   createdAt?: string | Date
 }
 
+export interface LiveSubscriptionConfig {
+  id?: string
+  name?: string
+  url: string
+  isEnabled?: boolean
+  updatedAt?: string | Date
+}
+
 interface MetaConfig {
   version: string
   exportDate: string
@@ -75,6 +83,7 @@ export interface ExportedConfig {
   settings?: SettingsConfig
   videoSources?: VideoSourceConfig[] | string
   subscriptions?: SubscriptionConfig[]
+  liveSubscriptions?: LiveSubscriptionConfig[]
   adFilteringEnabled?: boolean
   meta?: MetaConfig
 }

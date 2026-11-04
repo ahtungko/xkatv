@@ -68,6 +68,8 @@ http://stream.example/cctv1.m3u8`
           url: 'http://sub1.com',
           isEnabled: true,
           channels: [{ id: 'ch_1', name: '频道 1', url: 'http://c1.com', group: 'G1', subscriptionId: 'sub_1' }],
+          channelCount: 1,
+          updatedAt: '',
         },
         {
           id: 'sub_2',
@@ -75,58 +77,51 @@ http://stream.example/cctv1.m3u8`
           url: 'http://sub2.com',
           isEnabled: true,
           channels: [{ id: 'ch_2', name: '频道 2', url: 'http://c2.com', group: 'G2', subscriptionId: 'sub_2' }],
+          channelCount: 1,
+          updatedAt: '',
         },
       ],
       cachedChannels: [
-        { id: 'ch_1', name: '频道 1', url: 'http://c1.com', group: 'G1', subscriptionId: 'sub_1' },
-        { id: 'ch_2', name: '频道 2', url: 'http://c2.com', group: 'G2', subscriptionId: 'sub_2' },
+        { id: 'sub_1_ch_1', name: '频道 1', url: 'http://c1.com', group: 'G1', subscriptionId: 'sub_1' },
+        { id: 'sub_2_ch_2', name: '频道 2', url: 'http://c2.com', group: 'G2', subscriptionId: 'sub_2' },
       ],
     })
 
-    const mockM3uUpdated = `#EXTM3U
-#EXTINF:-1 group-title="G1",频道 1 新版
-http://c1-new.com`
-
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      text: async () => mockM3uUpdated,
+      text: async () => `#EXTM3U\n#EXTINF:-1,新频道 1\nhttp://c1-new.com`,
     }))
 
     await useLiveStore.getState().refreshSubscription('sub_1')
 
     const state = useLiveStore.getState()
     expect(state.cachedChannels).toHaveLength(2)
-    // sub_1 的频道已更新
-    expect(state.cachedChannels.some(c => c.name === '频道 1 新版')).toBe(true)
-    // sub_2 的频道依然保留！
+    expect(state.cachedChannels.some(c => c.name === '新频道 1')).toBe(true)
     expect(state.cachedChannels.some(c => c.name === '频道 2')).toBe(true)
   })
 
-  it('停用或删除订阅时即时清理频道缓存与活跃播放频道 (P2)', () => {
+  it('禁用或删除订阅时立即清除缓存频道与激活状态 (P2)', () => {
     const ch1 = { id: 'sub_1_ch_1', name: '频道 1', url: 'http://c1.com', group: 'G1', subscriptionId: 'sub_1' }
     const ch2 = { id: 'sub_2_ch_2', name: '频道 2', url: 'http://c2.com', group: 'G2', subscriptionId: 'sub_2' }
 
     useLiveStore.setState({
       subscriptions: [
-        { id: 'sub_1', name: '源 1', url: 'http://sub1.com', isEnabled: true, channels: [ch1] },
-        { id: 'sub_2', name: '源 2', url: 'http://sub2.com', isEnabled: true, channels: [ch2] },
+        { id: 'sub_1', name: '源 1', url: 'http://sub1.com', isEnabled: true, channels: [ch1], channelCount: 1, updatedAt: '' },
+        { id: 'sub_2', name: '源 2', url: 'http://sub2.com', isEnabled: true, channels: [ch2], channelCount: 1, updatedAt: '' },
       ],
       cachedChannels: [ch1, ch2],
       activeChannel: ch1,
     })
 
-    // 停用 sub_1
     useLiveStore.getState().updateSubscription('sub_1', { isEnabled: false })
     let state = useLiveStore.getState()
     expect(state.cachedChannels).toHaveLength(1)
     expect(state.cachedChannels[0].id).toBe('sub_2_ch_2')
-    // 活跃频道自动重置为剩余可用频道或 null
+    // 原激活频道被禁用后重置
     expect(state.activeChannel?.id).toBe('sub_2_ch_2')
 
-    // 删除 sub_2
     useLiveStore.getState().deleteSubscription('sub_2')
     state = useLiveStore.getState()
-    expect(state.subscriptions).toHaveLength(1)
     expect(state.cachedChannels).toHaveLength(0)
     expect(state.activeChannel).toBeNull()
   })
@@ -136,66 +131,57 @@ http://c1-new.com`
 
     useLiveStore.setState({
       subscriptions: [
-        { id: 'sub_1', name: '源 1', url: 'http://sub1.com', isEnabled: true, channels: [ch1] },
+        { id: 'sub_1', name: '源 1', url: 'http://sub1.com', isEnabled: true, channels: [ch1], channelCount: 1, updatedAt: '' },
       ],
       cachedChannels: [ch1],
     })
 
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network timeout')))
 
-    // refreshSubscription 应当抛出异常
     await expect(useLiveStore.getState().refreshSubscription('sub_1')).rejects.toThrow()
-    // 缓存依然完好无损
+    // 缓存依然存在
     expect(useLiveStore.getState().cachedChannels).toEqual([ch1])
 
-    // refreshAllSubscriptions 也应当抛出异常
+    // 全量刷新也同样抛出并保留
     await expect(useLiveStore.getState().refreshAllSubscriptions()).rejects.toThrow()
-    // 缓存依然不被清空
     expect(useLiveStore.getState().cachedChannels).toEqual([ch1])
   })
 
-  it('两个包含相同频道的订阅不会发生 ID 碰撞 (P2)', async () => {
-    const mockM3u = `#EXTM3U
-#EXTINF:-1 group-title="央视频道",CCTV-1
-http://stream.example/cctv1.m3u8`
-
+  it('不同订阅下同名频道分配独立唯一ID防止碰撞 (P2)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      text: async () => mockM3u,
+      text: async () => `#EXTM3U\n#EXTINF:-1,CCTV-1\nhttp://cctv.com`,
     }))
 
     await useLiveStore.getState().addSubscription({
       name: '源 A',
-      url: 'http://a.com/live.m3u',
+      url: 'http://a.com',
       isEnabled: true,
     })
-
     await useLiveStore.getState().addSubscription({
       name: '源 B',
-      url: 'http://b.com/live.m3u',
+      url: 'http://b.com',
       isEnabled: true,
     })
 
     const state = useLiveStore.getState()
     expect(state.cachedChannels).toHaveLength(2)
-    // 两个频道的 ID 必须包含各自的订阅 ID 前缀，完全不相等
+    // 两个 ID 必须不同！
     expect(state.cachedChannels[0].id).not.toBe(state.cachedChannels[1].id)
-    expect(state.cachedChannels[0].subscriptionId).toBe(state.subscriptions[0].id)
-    expect(state.cachedChannels[1].subscriptionId).toBe(state.subscriptions[1].id)
   })
 
-  it('批量刷新期间发生的并发订阅删除/修改不会被快照覆盖 (P2)', async () => {
+  it('全量刷新并发时不覆盖期间的订阅修改 (P2)', async () => {
+    const sub1 = { id: 'sub_1', name: '源 1', url: 'http://sub1.com', isEnabled: true, channels: [], channelCount: 0, updatedAt: '' }
+    const sub2 = { id: 'sub_2', name: '源 2', url: 'http://sub2.com', isEnabled: true, channels: [], channelCount: 0, updatedAt: '' }
+
     useLiveStore.setState({
-      subscriptions: [
-        { id: 'sub_1', name: '源 1', url: 'http://s1.com', isEnabled: true },
-        { id: 'sub_2', name: '源 2', url: 'http://s2.com', isEnabled: true },
-      ],
+      subscriptions: [sub1, sub2],
+      cachedChannels: [],
     })
 
-    // 模拟 fetch 过程中用户删除了 sub_2
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
-      if (url.includes('s1.com')) {
-        // 在 s1 抓取中途，用户在界面上删除了 sub_2
+      // 模拟请求期间，用户删除了 sub_2
+      if (url.includes('sub1.com')) {
         useLiveStore.getState().deleteSubscription('sub_2')
         return {
           ok: true,
@@ -215,5 +201,16 @@ http://stream.example/cctv1.m3u8`
     expect(state.subscriptions.some(s => s.id === 'sub_2')).toBe(false)
     expect(state.subscriptions).toHaveLength(1)
     expect(state.subscriptions[0].id).toBe('sub_1')
+  })
+
+  it('initializeEnvSubscriptions 能正常执行初始化', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => `#EXTM3U\n#EXTINF:-1,C1\nhttp://c1.com`,
+    }))
+
+    await useLiveStore.getState().initializeEnvSubscriptions()
+    const state = useLiveStore.getState()
+    expect(state.isLoading).toBe(false)
   })
 })

@@ -6,6 +6,7 @@ import { Button } from '@/shared/components/ui/button'
 import { Badge } from '@/shared/components/ui/badge'
 import { ScrollArea } from '@/shared/components/ui/scroll-area'
 import { useLiveStore } from '@/shared/store/liveStore'
+import { useAuthStore } from '@/shared/store/authStore'
 import { LivePlayer } from '../components/LivePlayer'
 import { cn } from '@/shared/lib'
 import { toast } from 'sonner'
@@ -19,6 +20,7 @@ export default function LiveView() {
     isLoading,
   } = useLiveStore()
 
+  const isAdmin = useAuthStore(state => state.account?.role === 'admin')
   const [selectedGroup, setSelectedGroup] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -49,6 +51,18 @@ export default function LiveView() {
       setActiveChannel(cachedChannels[0])
     }
   }, [activeChannel, cachedChannels, setActiveChannel])
+
+  // 首次进入页面若没有可用频道，自动拉取环境变量中的订阅并加载频道
+  useEffect(() => {
+    const state = useLiveStore.getState()
+    if (state.cachedChannels.length === 0 && !state.isLoading) {
+      if (state.subscriptions.length === 0) {
+        void state.initializeEnvSubscriptions()
+      } else if (state.subscriptions.some(s => s.isEnabled)) {
+        void refreshAllSubscriptions()
+      }
+    }
+  }, [refreshAllSubscriptions])
 
   const handleRefresh = async () => {
     toast.info('正在刷新直播频道列表...')
@@ -91,62 +105,80 @@ export default function LiveView() {
             <span className="hidden sm:inline">刷新频道</span>
           </Button>
 
-          <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 text-xs">
-            <Link to="/settings">
-              <span className="hidden sm:inline">源设置</span>
-              <ExternalLink className="size-3.5" />
-            </Link>
-          </Button>
+          {isAdmin && (
+            <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 text-xs">
+              <Link to="/settings/source">
+                <span className="hidden sm:inline">源设置</span>
+                <ExternalLink className="size-3.5" />
+              </Link>
+            </Button>
+          )}
         </div>
       </header>
 
       {/* Main Content Layout */}
-      {cachedChannels.length === 0 ? (
+      {isLoading && cachedChannels.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+          <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-red-500/10 text-red-500">
+            <RefreshCw className="size-8 animate-spin" />
+          </div>
+          <h2 className="text-lg font-semibold">正在同步直播频道...</h2>
+          <p className="text-muted-foreground mt-1 max-w-sm text-sm">
+            正在从直播源获取最新的节目单与频道列表，请稍候。
+          </p>
+        </div>
+      ) : cachedChannels.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
           <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground">
             <Tv className="size-8" />
           </div>
-          <h2 className="text-lg font-semibold">暂无直播频道</h2>
+          <h2 className="text-lg font-semibold">暂无可用直播频道</h2>
           <p className="text-muted-foreground mt-1 max-w-sm text-sm">
-            尚未添加 M3U 直播源或频道为空。您可以在设置中导入直播源订阅。
+            {isAdmin
+              ? '尚未添加 M3U 直播源或频道为空。您可以在设置中导入直播源订阅。'
+              : '暂未加载到可用直播频道，请点击右上角「刷新频道」重试。'}
           </p>
-          <Button asChild className="mt-5 gap-2">
-            <Link to="/settings">
-              前往「源管理」配置直播源
-              <ExternalLink className="size-4" />
-            </Link>
-          </Button>
+          {isAdmin && (
+            <Button asChild className="mt-5 gap-2">
+              <Link to="/settings/source">
+                前往「源管理」配置直播源
+                <ExternalLink className="size-4" />
+              </Link>
+            </Button>
+          )}
         </div>
       ) : (
         <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
-          {/* Player Section */}
-          <div className="flex flex-1 flex-col overflow-hidden bg-black/95">
-            <div className="relative flex-1 bg-black">
+          {/* Main Player Area */}
+          <div className="flex flex-1 flex-col bg-black">
+            <div className="relative flex-1">
               <LivePlayer
                 channel={activeChannel}
-                className="size-full max-h-[60vh] lg:max-h-full"
+                className="absolute inset-0 size-full"
               />
             </div>
 
-            {/* Active Channel Info Bar */}
+            {/* Current Playing Channel Bar */}
             {activeChannel && (
-              <div className="flex shrink-0 items-center justify-between border-t border-white/10 bg-zinc-950 px-4 py-3 text-white">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-red-500/20 text-red-400">
-                    <Radio className="size-4 animate-pulse" />
+              <div className="flex shrink-0 items-center justify-between border-t border-zinc-800 bg-zinc-950 px-4 py-2.5 text-zinc-200">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-7 items-center justify-center rounded-full bg-red-500/20 text-red-500">
+                    <Radio className="size-3.5 animate-pulse" />
                   </div>
-                  <div className="truncate">
+                  <div>
                     <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-semibold">{activeChannel.name}</span>
-                      <Badge
-                        variant="secondary"
-                        className="bg-white/10 text-[10px] text-zinc-300 hover:bg-white/10"
-                      >
-                        {activeChannel.group}
-                      </Badge>
+                      <span className="text-sm font-medium">{activeChannel.name}</span>
+                      {activeChannel.group && (
+                        <Badge
+                          variant="secondary"
+                          className="border-zinc-700 bg-zinc-800 text-[10px] text-zinc-300"
+                        >
+                          {activeChannel.group}
+                        </Badge>
+                      )}
                     </div>
-                    <div className="mt-0.5 flex items-center gap-2 text-[11px] text-zinc-400">
-                      {isChannelHttp && isHttps ? (
+                    <div className="text-[11px] text-zinc-400">
+                      {isHttps && isChannelHttp ? (
                         <span className="flex items-center gap-1 text-emerald-400">
                           <ShieldCheck className="size-3" />
                           Worker 代理池加速中 (HTTP 兼容)
