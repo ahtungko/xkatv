@@ -161,3 +161,7 @@ No default `is_live_enabled` row is inserted. Until an administrator saves a val
 Administrators can toggle the flag on the live page, source settings, or system settings. Other users lose the navigation entry and see a closed message when visiting `/live`; administrators retain preview access. This controls the app UI, not third-party stream URLs already known to a user. Subscription lists and channel caches remain local; this migration synchronizes the global flag only.
 
 If using an external live Worker, redeploy its latest script along with the app for native HLS support. See [Worker deployment](../workers/live-stream-proxy/README.md).
+
+## TV casting
+
+Apply [202611050001_tv_cast.sql](../supabase/migrations/202611050001_tv_cast.sql) after the managed-account migrations (also required after the consolidated schema for new projects). See [TV casting](tv-casting.md) for pairing, temporary credentials, consent, expiry and polling behavior. No public Realtime channel is used.

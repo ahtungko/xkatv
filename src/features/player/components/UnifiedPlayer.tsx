@@ -747,6 +747,7 @@ export default function UnifiedPlayer() {
 
   const tvCast = useTvCast({
     currentMedia: castMediaPayload,
+    getCurrentTime: () => activeArt?.currentTime || 0,
     onPauseLocalPlayer: () => {
       if (activeArt && !activeArt.video?.paused) {
         activeArt.pause()

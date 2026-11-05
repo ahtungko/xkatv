@@ -38,3 +38,11 @@ const app = (
 )
 
 createRoot(root).render(import.meta.env.DEVELOPMENT ? <StrictMode>{app}</StrictMode> : app)
+
+// Capture QR pairing before route/login navigation removes the query string.
+try {
+ const pin = new URLSearchParams(window.location.search).get('cast_pin')
+ if (pin && /^\d{4}$/.test(pin)) {
+  sessionStorage.setItem('tv_cast_intent', JSON.stringify({ pin, time: Date.now() }))
+ }
+} catch { /* Storage can be unavailable in private browsers. */ }

@@ -1,31 +1,28 @@
+import { syncClient } from '@/shared/sync/client'
+import { castRpc, openCastSession, mediaIdentity, type CastSession } from '../lib/tvCastSession'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import QRCode from 'qrcode'
 import Artplayer from 'artplayer'
 import Hls from 'hls.js'
 import type { HlsConfig } from 'hls.js'
 import { createHlsLoaderClass, createM3u8Processor } from '@xkatv/cms-core/m3u8'
-import { syncClient } from '@/shared/sync/client'
-import {
-  type TvCastMediaPayload,
-  type TvCastMessage,
-  getTvCastChannelName,
-} from '../lib/tvCastProtocol'
+import { type TvCastMediaPayload, type TvCastMessage } from '../lib/tvCastProtocol'
 import { Tv, QrCode, AlertTriangle, RefreshCw, Sparkles } from 'lucide-react'
 import { Button } from '@/shared/components/ui/button'
 
 const m3u8Processor = createM3u8Processor({ filterAds: true })
-
-function generatePin(): string {
-  // 4位数字码，直观、适合遥控器与键盘输入
-  return Math.floor(1000 + Math.random() * 9000).toString()
-}
 
 interface ArtplayerWithHls extends Artplayer {
   hls?: Hls
 }
 
 export default function TvReceiverView() {
-  const [pin, setPin] = useState<string>(() => generatePin())
+  const [pin, setPin] = useState<string>('')
+  const [sessionVersion, setSessionVersion] = useState(0)
+  const [pending, setPending] = useState(false)
+  const [pairError, setPairError] = useState('')
+  const acceptedRef = useRef(false)
+  const loadedRef = useRef('')
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
   const [isConnected, setIsConnected] = useState(false)
   const [connectedDevice, setConnectedDevice] = useState<string>('')
@@ -35,7 +32,10 @@ export default function TvReceiverView() {
 
   const playerContainerRef = useRef<HTMLDivElement | null>(null)
   const artRef = useRef<ArtplayerWithHls | null>(null)
-  const channelRef = useRef<ReturnType<NonNullable<typeof syncClient>['channel']> | null>(null)
+  const channelRef = useRef<{
+    send: (event: { payload: TvCastMessage; type?: string; event?: string }) => Promise<void>
+    close: () => void
+  } | null>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const osdTimerRef = useRef<number | null>(null)
 
@@ -86,118 +86,142 @@ export default function TvReceiverView() {
 
   // 刷新配对码
   const handleRegeneratePin = () => {
-    if (channelRef.current && syncClient) {
-      void syncClient.removeChannel(channelRef.current)
-      channelRef.current = null
-    }
-    setPin(generatePin())
+    channelRef.current?.close()
+    setCurrentMedia(null)
+    setPin('')
+    setQrCodeUrl('')
+    setPending(false)
+    acceptedRef.current = false
+    loadedRef.current = ''
     setIsConnected(false)
     setConnectedDevice('')
+    setSessionVersion(v => v + 1)
   }
 
-  // 监听 Supabase Realtime 通道
   useEffect(() => {
-    if (!syncClient) return
-
-    const channelName = getTvCastChannelName(pin)
-    const channel = syncClient.channel(channelName, {
-      config: {
-        broadcast: { self: false },
-      },
-    })
-    channelRef.current = channel
-
-    channel.on('broadcast', { event: 'cast_event' }, ({ payload }) => {
-      const msg = payload as TvCastMessage
-      if (!msg) return
-
-      switch (msg.type) {
-        case 'connect_request': {
-          setIsConnected(true)
-          setConnectedDevice(msg.senderName || '控制端')
-          showOsd(`已连接至 ${msg.senderName || '控制端'}`)
-          // 回复连接确认
-          void channel.send({
-            type: 'broadcast',
-            event: 'cast_event',
-            payload: {
-              type: 'connect_ack',
-              deviceName: 'LG WebOS TV',
-              isPlaying: Boolean(artRef.current && !artRef.current.video?.paused),
-            },
-          })
-          break
+    let cancelled = false
+    let close: (() => void) | undefined
+    setPairError('')
+    void castRpc('create')
+      .then((session: CastSession) => {
+        if (cancelled) {
+          void castRpc('close', session).catch(() => {})
+          return
         }
-
-        case 'load_media': {
-          setIsConnected(true)
-          setCurrentMedia(msg.payload)
-          showOsd(`正在加载：《${msg.payload.mediaTitle}》 ${msg.payload.episodeTitle}`)
-          break
-        }
-
-        case 'command': {
-          const player = artRef.current
-          if (!player) break
-
-          switch (msg.payload.action) {
-            case 'play':
-              void player.play()
-              showOsd('▶ 播放')
-              break
-            case 'pause':
-              player.pause()
-              showOsd('⏸ 暂停')
-              break
-            case 'toggle':
-              player.toggle()
-              showOsd(player.video?.paused ? '⏸ 暂停' : '▶ 播放')
-              break
-            case 'seek':
-              if (typeof msg.payload.value === 'number') {
-                player.seek = msg.payload.value
-                const m = Math.floor(msg.payload.value / 60)
-                const s = Math.floor(msg.payload.value % 60)
-                showOsd(`⏩ 跳转至 ${m}:${s.toString().padStart(2, '0')}`)
+        setPin(session.pin)
+        const channel = {
+          send: async (event: { payload: TvCastMessage; type?: string; event?: string }) => {
+            try {
+              await transport.send(event.payload)
+              if (event.payload.type === 'connect_ack') {
+                acceptedRef.current = true
+                setPending(false)
+                setIsConnected(true)
               }
-              break
-            case 'skip_intro':
-              player.seek = (player.currentTime || 0) + 90
-              showOsd('⏩ 已跳过片头 (+90s)')
-              break
-            case 'volume':
-              if (typeof msg.payload.value === 'number') {
-                player.volume = Math.max(0, Math.min(1, msg.payload.value))
-                showOsd(`🔊 音量: ${Math.round(player.volume * 100)}%`)
+            } catch {
+              setPairError('连接失败，请刷新配对码')
+              setCurrentMedia(null)
+            }
+          },
+          close: () => transport.close(),
+        }
+        const transport = openCastSession(
+          session,
+          (msg: TvCastMessage) => {
+            switch (msg.type) {
+              case 'connect_request': {
+                setPending(true)
+                setConnectedDevice(msg.senderName || '手机控制端')
+                break
               }
-              break
-          }
-          break
-        }
 
-        case 'disconnect': {
-          setIsConnected(false)
-          setConnectedDevice('')
-          if (artRef.current) {
-            artRef.current.destroy(true)
-            artRef.current = null
-          }
-          setCurrentMedia(null)
-          showOsd('控制端已断开连接')
-          break
-        }
-      }
-    })
+              case 'load_media': {
+                if (
+                  !acceptedRef.current ||
+                  !msg.payload ||
+                  !/^https?:\/\//.test(msg.payload.videoUrl)
+                )
+                  break
+                const key = mediaIdentity(msg.payload)
+                if (loadedRef.current === key) break
+                loadedRef.current = key
+                setIsConnected(true)
+                setCurrentMedia(msg.payload)
+                showOsd(`正在加载：《${msg.payload.mediaTitle}》 ${msg.payload.episodeTitle}`)
+                break
+              }
 
-    channel.subscribe()
+              case 'command': {
+                const player = artRef.current
+                if (!player) break
 
+                switch (msg.payload.action) {
+                  case 'play':
+                    void player.play()
+                    showOsd('▶ 播放')
+                    break
+                  case 'pause':
+                    player.pause()
+                    showOsd('⏸ 暂停')
+                    break
+                  case 'toggle':
+                    player.toggle()
+                    showOsd(player.video?.paused ? '⏸ 暂停' : '▶ 播放')
+                    break
+                  case 'seek':
+                    if (typeof msg.payload.value === 'number') {
+                      player.seek = msg.payload.value
+                      const m = Math.floor(msg.payload.value / 60)
+                      const s = Math.floor(msg.payload.value % 60)
+                      showOsd(`⏩ 跳转至 ${m}:${s.toString().padStart(2, '0')}`)
+                    }
+                    break
+                  case 'skip_intro':
+                    player.seek = (player.currentTime || 0) + 90
+                    showOsd('⏩ 已跳过片头 (+90s)')
+                    break
+                  case 'volume':
+                    if (typeof msg.payload.value === 'number') {
+                      player.volume = Math.max(0, Math.min(1, msg.payload.value))
+                      showOsd(`🔊 音量: ${Math.round(player.volume * 100)}%`)
+                    }
+                    break
+                }
+                break
+              }
+
+              case 'disconnect': {
+                setIsConnected(false)
+                setConnectedDevice('')
+                if (artRef.current) {
+                  artRef.current.destroy(true)
+                  artRef.current = null
+                }
+                setCurrentMedia(null)
+                showOsd('控制端已断开连接')
+                break
+              }
+            }
+          },
+          () => {
+            setPairError('会话已失效，请刷新配对码')
+            setCurrentMedia(null)
+            setIsConnected(false)
+            setPending(false)
+          },
+        )
+        channelRef.current = channel
+        close = channel.close
+      })
+      .catch(error => {
+        if (!cancelled) setPairError(error instanceof Error ? error.message : '配对服务不可用')
+      })
     return () => {
-      if (channel && syncClient) {
-        void syncClient.removeChannel(channel)
-      }
+      cancelled = true
+      close?.()
       channelRef.current = null
     }
-  }, [pin, showOsd])
+  }, [sessionVersion, showOsd])
 
   // 播放器挂载与生命周期管理
   useEffect(() => {
@@ -305,6 +329,7 @@ export default function TvReceiverView() {
     return () => {
       window.clearInterval(progressTimer)
       if (artRef.current) {
+        artRef.current.hls?.destroy()
         artRef.current.destroy(true)
         artRef.current = null
       }
@@ -359,21 +384,22 @@ export default function TvReceiverView() {
   if (!syncClient) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 p-6 text-center text-white">
-        <AlertTriangle className="size-16 text-amber-500 mb-4 animate-bounce" />
+        <AlertTriangle className="mb-4 size-16 animate-bounce text-amber-500" />
         <h1 className="text-2xl font-bold">需要配置 Supabase 实时服务</h1>
-        <p className="mt-2 text-zinc-400 max-w-md text-sm leading-relaxed">
-          Web-to-Web 扫码投屏基于 Supabase Realtime 进行设备间即时通信。当前站点尚未配置 Supabase 凭据，请在环境变量或设置中心中完成配置。
+        <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-400">
+          Web-to-Web 扫码投屏基于 Supabase Realtime 进行设备间即时通信。当前站点尚未配置 Supabase
+          凭据，请在环境变量或设置中心中完成配置。
         </p>
       </div>
     )
   }
 
   return (
-    <div className="relative min-h-screen w-full bg-zinc-950 text-white overflow-hidden select-none font-sans">
+    <div className="relative min-h-screen w-full overflow-hidden bg-zinc-950 font-sans text-white select-none">
       {/* 顶部 OSD 提示浮层 */}
       {isOsdVisible && (
-        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300">
-          <div className="flex items-center gap-2.5 rounded-full bg-black/85 px-6 py-2.5 text-sm md:text-base font-semibold text-white shadow-2xl border border-white/20 backdrop-blur-xl animate-in fade-in zoom-in-95">
+        <div className="pointer-events-none fixed top-8 left-1/2 z-50 -translate-x-1/2 transition-all duration-300">
+          <div className="animate-in fade-in zoom-in-95 flex items-center gap-2.5 rounded-full border border-white/20 bg-black/85 px-6 py-2.5 text-sm font-semibold text-white shadow-2xl backdrop-blur-xl md:text-base">
             <Sparkles className="size-4 text-blue-400" />
             <span>{osdMessage}</span>
           </div>
@@ -382,10 +408,10 @@ export default function TvReceiverView() {
 
       {/* 正在播放时的全屏播放器容器 */}
       {currentMedia ? (
-        <div className="fixed inset-0 z-40 bg-black flex flex-col justify-center items-center">
+        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-black">
           <div ref={playerContainerRef} className="size-full" />
           {/* 遥控器操作指引小条（悬浮在左上方，半透明） */}
-          <div className="absolute top-4 left-6 z-50 flex items-center gap-3 text-xs text-white/50 bg-black/40 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10 pointer-events-none opacity-0 hover:opacity-100 transition-opacity">
+          <div className="pointer-events-none absolute top-4 left-6 z-50 flex items-center gap-3 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white/50 opacity-0 backdrop-blur-md transition-opacity hover:opacity-100">
             <span>OK: 播放/暂停</span>
             <span>←/→: 快退/快进 10s</span>
             <span>↑/↓: 调节音量</span>
@@ -396,53 +422,90 @@ export default function TvReceiverView() {
         /* 待机配对界面 (Cinema Standby Mode) */
         <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12">
           {/* 顶部品牌 */}
-          <header className="flex w-full items-center justify-between max-w-5xl">
+          <header className="flex w-full max-w-5xl items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 shadow-inner">
+              <div className="flex size-11 items-center justify-center rounded-2xl border border-blue-500/30 bg-blue-600/20 text-blue-400 shadow-inner">
                 <Tv className="size-6" />
               </div>
               <div>
-                <h1 className="text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
-                  xkaTV <span className="text-xs md:text-sm font-medium px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">大屏接收端</span>
+                <h1 className="flex items-center gap-2 text-xl font-black tracking-tight md:text-2xl">
+                  xkaTV{' '}
+                  <span className="rounded-full border border-blue-500/30 bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-300 md:text-sm">
+                    大屏接收端
+                  </span>
                 </h1>
                 <p className="text-xs text-zinc-400">智能电视 / LG webOS 专属全屏影院</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${isConnected ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-zinc-900 text-zinc-400 border-zinc-800'}`}>
-                <span className={`size-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
+              <div
+                className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${isConnected ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-zinc-800 bg-zinc-900 text-zinc-400'}`}
+              >
+                <span
+                  className={`size-2 rounded-full ${isConnected ? 'animate-pulse bg-emerald-400' : 'bg-zinc-500'}`}
+                />
                 {isConnected ? `已连接 (${connectedDevice})` : '等待手机投屏'}
               </div>
             </div>
           </header>
 
+          {pairError && (
+            <p role="alert" className="text-red-400">
+              {pairError}
+            </p>
+          )}
+          {pending && (
+            <div className="flex items-center gap-4">
+              <span>允许手机控制端投屏到这台电视？</span>
+              <Button
+                onClick={() => {
+                  void channelRef.current?.send({
+                    payload: { type: 'connect_ack', deviceName: 'TV', isPlaying: false },
+                  })
+                }}
+              >
+                允许投屏
+              </Button>
+              <Button variant="outline" onClick={handleRegeneratePin}>
+                拒绝并刷新配对码
+              </Button>
+            </div>
+          )}
           {/* 中央大屏配对卡片 */}
-          <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-14 my-auto max-w-4xl w-full">
+          <div className="my-auto flex w-full max-w-4xl flex-col items-center justify-center gap-8 md:flex-row md:gap-14">
             {/* 二维码展示区 */}
-            <div className="flex flex-col items-center gap-3 p-5 rounded-3xl bg-zinc-900/80 border border-white/10 shadow-2xl backdrop-blur-md">
-              <div className="p-3 bg-zinc-950 rounded-2xl border border-white/10 shadow-inner">
+            <div className="flex flex-col items-center gap-3 rounded-3xl border border-white/10 bg-zinc-900/80 p-5 shadow-2xl backdrop-blur-md">
+              <div className="rounded-2xl border border-white/10 bg-zinc-950 p-3 shadow-inner">
                 {qrCodeUrl ? (
                   <img
                     src={qrCodeUrl}
                     alt="投屏二维码"
-                    className="size-48 sm:size-56 md:size-64 object-contain rounded-xl"
+                    className="size-48 rounded-xl object-contain sm:size-56 md:size-64"
                   />
                 ) : (
-                  <div className="size-48 sm:size-56 md:size-64 flex items-center justify-center text-zinc-500">
+                  <div className="flex size-48 items-center justify-center text-zinc-500 sm:size-56 md:size-64">
                     <QrCode className="size-16 animate-pulse" />
                   </div>
                 )}
               </div>
-              <p className="text-xs md:text-sm text-zinc-400 font-medium">使用手机相机或扫一扫直接配对</p>
+              <p className="text-xs font-medium text-zinc-400 md:text-sm">
+                扫码后在手机选择视频，再在电视确认配对
+              </p>
             </div>
 
             {/* 4 位数字配对码展示区 */}
-            <div className="flex flex-col items-center md:items-start space-y-6 text-center md:text-left">
+            <div className="flex flex-col items-center space-y-6 text-center md:items-start md:text-left">
               <div className="space-y-1">
-                <span className="text-xs uppercase tracking-wider text-blue-400 font-semibold">TV Pairing Code</span>
-                <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">4 位数字配对码</h2>
-                <p className="text-sm text-zinc-400">在手机/电脑播放器上点击「投屏到电视」并输入：</p>
+                <span className="text-xs font-semibold tracking-wider text-blue-400 uppercase">
+                  TV Pairing Code
+                </span>
+                <h2 className="text-2xl font-extrabold tracking-tight md:text-3xl">
+                  4 位数字配对码
+                </h2>
+                <p className="text-sm text-zinc-400">
+                  在手机/电脑播放器上点击「投屏到电视」并输入：
+                </p>
               </div>
 
               {/* 醒目的 PIN 码方块 */}
@@ -450,7 +513,7 @@ export default function TvReceiverView() {
                 {pin.split('').map((digit, idx) => (
                   <div
                     key={idx}
-                    className="flex size-14 sm:size-16 md:size-20 items-center justify-center rounded-2xl bg-gradient-to-b from-zinc-800 to-zinc-900 border-2 border-blue-500/40 text-3xl sm:text-4xl md:text-5xl font-black text-white shadow-lg tracking-wider"
+                    className="flex size-14 items-center justify-center rounded-2xl border-2 border-blue-500/40 bg-gradient-to-b from-zinc-800 to-zinc-900 text-3xl font-black tracking-wider text-white shadow-lg sm:size-16 sm:text-4xl md:size-20 md:text-5xl"
                   >
                     {digit}
                   </div>
@@ -462,7 +525,7 @@ export default function TvReceiverView() {
                   variant="outline"
                   size="sm"
                   onClick={handleRegeneratePin}
-                  className="rounded-full border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:text-white hover:bg-zinc-800 gap-1.5 text-xs h-8"
+                  className="h-8 gap-1.5 rounded-full border-zinc-800 bg-zinc-900/60 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white"
                 >
                   <RefreshCw className="size-3.5" />
                   刷新配对码
@@ -472,11 +535,13 @@ export default function TvReceiverView() {
           </div>
 
           {/* 底部使用引导与遥控器技巧 */}
-          <footer className="w-full max-w-4xl rounded-2xl bg-zinc-900/40 border border-white/5 p-4 md:p-5 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
+          <footer className="flex w-full max-w-4xl flex-col items-center justify-between gap-3 rounded-2xl border border-white/5 bg-zinc-900/40 p-4 text-xs text-zinc-400 md:flex-row md:p-5">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-4 text-amber-400 shrink-0" />
+              <Sparkles className="size-4 shrink-0 text-amber-400" />
               <span>
-                <strong>LG 遥控器技巧：</strong>在 LG 电视遥控器上按黄色键或在浏览器菜单中将本页添加为<strong>「书签」</strong>，下次开机一键直达！
+                <strong>LG 遥控器技巧：</strong>在 LG
+                电视遥控器上按黄色键或在浏览器菜单中将本页添加为<strong>「书签」</strong>
+                ，下次开机一键直达！
               </span>
             </div>
             <div className="flex items-center gap-4 text-zinc-400">
