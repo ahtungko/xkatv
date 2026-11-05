@@ -5,7 +5,7 @@ import Artplayer from 'artplayer'
 
 import type Hls from 'hls.js'
 import type { HlsConfig } from 'hls.js'
-import { Check, ChevronDown, Clipboard, EyeOff, Users, X } from 'lucide-react'
+import { Check, ChevronDown, Clipboard, EyeOff, Tv, Users, X } from 'lucide-react'
 import { type DetailResult } from '@xkatv/cms-core'
 import { createM3u8Processor, createHlsLoaderClass } from '@xkatv/cms-core/m3u8'
 import { Button } from '@/shared/components/ui/button'
@@ -56,13 +56,16 @@ import {
   WatchPartyModal,
   WatchPartyChatOverlay,
   WatchPartyInlineBar,
+  TvCastModal,
 } from '@/features/player/components'
 import {
   useEpisodePagination,
   useMobilePlayerGestures,
   useTmdbPlayback,
   useWatchParty,
+  useTvCast,
 } from '@/features/player/hooks'
+import { type TvCastMediaPayload } from '@/features/player/lib/tvCastProtocol'
 import {
   buildTmdbSelectionScopeKey,
   computeMiniPlayerRect,
@@ -714,6 +717,52 @@ export default function UnifiedPlayer() {
   })
 
   const partyRef = useRef(party)
+
+  const castMediaPayload: TvCastMediaPayload | null = useMemo(() => {
+    if (!currentVideoUrl) return null
+    return {
+      videoUrl: currentVideoUrl,
+      mediaTitle: partyMediaTitle,
+      episodeTitle: partyEpisodeTitle,
+      episodeIndex: selectedEpisode,
+      totalEpisodes: episodes.length,
+      posterUrl: partyPosterUrl,
+      initialTime: activeArt?.currentTime || 0,
+      adFilteringEnabled,
+      sourceCode: resolvedSourceCode,
+      vodId: resolvedVodId,
+    }
+  }, [
+    currentVideoUrl,
+    partyMediaTitle,
+    partyEpisodeTitle,
+    selectedEpisode,
+    episodes.length,
+    partyPosterUrl,
+    activeArt,
+    adFilteringEnabled,
+    resolvedSourceCode,
+    resolvedVodId,
+  ])
+
+  const tvCast = useTvCast({
+    currentMedia: castMediaPayload,
+    onPauseLocalPlayer: () => {
+      if (activeArt && !activeArt.video?.paused) {
+        activeArt.pause()
+      }
+    },
+    onPlayNextEpisode: () => {
+      if (selectedEpisode < episodes.length - 1) {
+        handlePartySelectEpisode(selectedEpisode + 1)
+      }
+    },
+    onPlayPrevEpisode: () => {
+      if (selectedEpisode > 0) {
+        handlePartySelectEpisode(selectedEpisode - 1)
+      }
+    },
+  })
   useEffect(() => {
     partyRef.current = party
   }, [party])
@@ -1945,6 +1994,21 @@ export default function UnifiedPlayer() {
           onCreateParty={party.createParty}
           onLeaveParty={party.leaveParty}
         />
+        <TvCastModal
+          isOpen={tvCast.isModalOpen}
+          onClose={() => tvCast.setIsModalOpen(false)}
+          isCasting={tvCast.isCasting}
+          connectedPin={tvCast.connectedPin}
+          recentPins={tvCast.recentPins}
+          remoteState={tvCast.remoteState}
+          onConnect={tvCast.connectAndCast}
+          onSendCommand={tvCast.sendCommand}
+          onDisconnect={tvCast.disconnect}
+          hasPrevEpisode={selectedEpisode > 0}
+          hasNextEpisode={selectedEpisode < episodes.length - 1}
+          onPlayPrevEpisode={tvCast.onPlayPrevEpisode}
+          onPlayNextEpisode={tvCast.onPlayNextEpisode}
+        />
         <div className="min-w-0 space-y-3">
           {playbackNotice && (
             <p className="rounded-lg border px-3 py-2 text-sm" role="status">
@@ -1991,6 +2055,27 @@ export default function UnifiedPlayer() {
                     {party.isPartyActive
                       ? `一起看 (${party.participantCount}人)`
                       : '一起看'}
+                  </span>
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={tvCast.isCasting ? 'default' : 'ghost'}
+                  className={cn(
+                    'h-8 gap-1.5 rounded-full px-2.5 text-xs sm:px-3 transition-colors',
+                    tvCast.isCasting
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm'
+                      : 'hover:bg-white/10 text-muted-foreground hover:text-foreground',
+                  )}
+                  onClick={() => tvCast.setIsModalOpen(true)}
+                  aria-label="投屏到电视"
+                >
+                  <Tv className="size-3.5 text-blue-500" />
+                  <span>
+                    {tvCast.isCasting
+                      ? `正在投屏 (${tvCast.connectedPin})`
+                      : '投屏到电视'}
                   </span>
                 </Button>
 
