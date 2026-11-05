@@ -385,10 +385,9 @@ export default function TvReceiverView() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 p-6 text-center text-white">
         <AlertTriangle className="mb-4 size-16 animate-bounce text-amber-500" />
-        <h1 className="text-2xl font-bold">需要配置 Supabase 实时服务</h1>
+        <h1 className="text-2xl font-bold">未启用多端同步服务</h1>
         <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-400">
-          Web-to-Web 扫码投屏基于 Supabase Realtime 进行设备间即时通信。当前站点尚未配置 Supabase
-          凭据，请在环境变量或设置中心中完成配置。
+          扫码投屏需要启用云端实时同步服务。请检查站点环境配置或在系统设置中确认同步状态。
         </p>
       </div>
     )
@@ -434,7 +433,7 @@ export default function TvReceiverView() {
                     大屏接收端
                   </span>
                 </h1>
-                <p className="text-xs text-zinc-400">智能电视 / LG webOS 专属全屏影院</p>
+                <p className="text-xs text-zinc-400">大屏沉浸式全屏影院</p>
               </div>
             </div>
 
@@ -539,8 +538,7 @@ export default function TvReceiverView() {
             <div className="flex items-center gap-2">
               <Sparkles className="size-4 shrink-0 text-amber-400" />
               <span>
-                <strong>LG 遥控器技巧：</strong>在 LG
-                电视遥控器上按黄色键或在浏览器菜单中将本页添加为<strong>「书签」</strong>
+                <strong>遥控器技巧：</strong>在电视遥控器或浏览器菜单中将本页添加为<strong>「书签」</strong>
                 ，下次开机一键直达！
               </span>
             </div>

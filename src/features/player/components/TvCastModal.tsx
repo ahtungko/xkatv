@@ -91,13 +91,13 @@ export function TvCastModal({
               <Tv className="size-4" />
             </div>
             <DialogTitle className="text-lg font-bold">
-              {isCasting ? '大屏电视遥控器' : '投屏到电视 (LG webOS / 智能电视)'}
+              {isCasting ? '大屏电视遥控器' : '投屏到电视'}
             </DialogTitle>
           </div>
           <DialogDescription className="text-zinc-400 text-xs">
             {isCasting
-              ? `当前通过已授权的配对会话控制电视`
-              : '无需安装 App，电视内置浏览器打开网页即可全屏投映'}
+              ? '使用手机控制播放进度与剧集切换'
+              : '电视内置浏览器打开网页即可全屏投映'}
           </DialogDescription>
         </DialogHeader>
 
@@ -311,14 +311,14 @@ export function TvCastModal({
                 如何使用？
               </p>
               <div className="space-y-1.5 pl-1 leading-relaxed">
-                <p>1. 在 LG 电视主页打开自带的「网络浏览器 (Web Browser)」。</p>
+                <p>1. 在电视主页打开自带的「网络浏览器」。</p>
                 <p>
                   2. 输入专属接收网址：
                   <span className="text-blue-400 font-mono font-medium ml-1">
                     {typeof window !== 'undefined' ? `${window.location.host}/tv` : '/tv'}
                   </span>
                 </p>
-                <p>3. 输入电视上的配对码，再用电视遥控器选择「允许投屏」。配对码五分钟内有效。</p>
+                <p>3. 屏幕即会显示 4 位数字配对码，输入即可投屏。</p>
               </div>
             </div>
           </div>
