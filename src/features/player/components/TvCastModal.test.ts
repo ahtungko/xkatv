@@ -86,14 +86,10 @@ describe('TvCastModal', () => {
     expect(document.body.textContent).toContain('繁花')
     expect(document.body.textContent).toContain('第 3 集')
 
-    // Find and click skip intro button
-    const buttons = Array.from(document.querySelectorAll('button'))
-    const skipBtn = buttons.find(b => b.textContent?.includes('跳片头'))
-    expect(skipBtn).toBeDefined()
-    if (skipBtn) {
-      skipBtn.click()
-      expect(onSendCommand).toHaveBeenCalledWith('skip_intro')
-    }
+    expect(document.body.textContent).not.toContain('跳片头')
+    const dialog=document.querySelector('[role="dialog"]')!
+    await act(async()=>dialog.dispatchEvent(new KeyboardEvent('keydown',{key:' ',code:'Space',bubbles:true,cancelable:true})))
+    expect(onSendCommand).toHaveBeenCalledWith('toggle')
 
     root.unmount()
     container.remove()

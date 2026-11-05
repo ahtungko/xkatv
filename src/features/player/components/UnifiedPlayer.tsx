@@ -2069,13 +2069,13 @@ export default function UnifiedPlayer() {
                       ? 'bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm'
                       : 'hover:bg-white/10 text-muted-foreground hover:text-foreground',
                   )}
-                  onClick={() => tvCast.setIsModalOpen(true)}
+                  onClick={() => tvCast.isCasting ? void tvCast.castCurrent() : tvCast.setIsModalOpen(true)}
                   aria-label="投屏到电视"
                 >
                   <Tv className="size-3.5 text-blue-500" />
                   <span>
                     {tvCast.isCasting
-                      ? `正在投屏 (${tvCast.connectedPin})`
+                      ? `在电视播放 (${tvCast.connectedPin})`
                       : '投屏到电视'}
                   </span>
                 </Button>

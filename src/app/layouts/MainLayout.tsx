@@ -1,3 +1,4 @@
+import { GlobalTvCastControl } from '@/features/player/components/GlobalTvCastControl'
 import { mainLayoutRouteKey } from '@/shared/lib/routes'
 import Navigation from '@/shared/components/Navigation'
 import { SidebarProvider, SidebarInset } from '@/shared/components/ui/sidebar'
@@ -117,6 +118,7 @@ export default function MainLayout() {
       </div>
       <MobileTabBar />
       <GlobalWatchPartyPill />
+      <GlobalTvCastControl />
     </SidebarProvider>
   )
 }

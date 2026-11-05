@@ -24,9 +24,20 @@ export function openCastSession(
 ) {
   let stopped = false
   let cursor = 0
-  let timer: ReturnType<typeof setTimeout>
+  let timer: ReturnType<typeof setTimeout> | undefined
   let failures = 0
+  let inFlight = false
+  let visibilityEpoch = 0
+  const hidden = () => typeof document !== 'undefined' && document.hidden
+  const stop = () => {
+    stopped = true
+    clearTimeout(timer)
+    document.removeEventListener('visibilitychange', wake)
+  }
   const poll = async () => {
+    if (stopped || inFlight || hidden()) return
+    inFlight = true
+    const epoch = visibilityEpoch
     try {
       const events = (await castRpc('poll', { ...session, cursor })) as {
         id: number
@@ -39,26 +50,31 @@ export function openCastSession(
         onMessage(event.payload)
       }
     } catch {
-      if (!stopped && ++failures >= 3) {
-        stopped = true
+      if (!stopped && !hidden() && epoch === visibilityEpoch && ++failures >= 3) {
+        stop()
         onError()
-        return
       }
+    } finally {
+      inFlight = false
+      if (!stopped && !hidden()) timer = setTimeout(() => void poll(), 750)
     }
-    if (!stopped) timer = setTimeout(() => void poll(), 750)
   }
+  function wake() {
+    visibilityEpoch++
+    failures = 0
+    clearTimeout(timer)
+    if (!hidden()) void poll()
+  }
+  document.addEventListener('visibilitychange', wake)
   void poll()
   return {
     send: async (message: TvCastMessage) => {
-      if (!stopped) await castRpc('send', { ...session, payload: message })
+      if (stopped) throw new Error('连接已关闭')
+      await castRpc('send', { ...session, payload: message })
     },
-    stop: () => {
-      stopped = true
-      clearTimeout(timer)
-    },
+    stop,
     close: () => {
-      stopped = true
-      clearTimeout(timer)
+      stop()
       void castRpc('close', session).catch(() => {})
     },
   }

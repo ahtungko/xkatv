@@ -17,7 +17,6 @@ export type TvCastCommandAction =
   | 'toggle'
   | 'seek'
   | 'volume'
-  | 'skip_intro'
   | 'next_episode'
   | 'prev_episode'
 

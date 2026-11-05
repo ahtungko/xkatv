@@ -1,3 +1,4 @@
+import { finiteTime, seekTv, toggleTv, handleTvKey } from '../lib/tvControls'
 import { syncClient } from '@/shared/sync/client'
 import { castRpc, openCastSession, mediaIdentity, type CastSession } from '../lib/tvCastSession'
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -71,7 +72,7 @@ export default function TvReceiverView() {
   // 生成二维码
   useEffect(() => {
     if (!pin) return
-    const pairUrl = `${window.location.origin}/?cast_pin=${pin}`
+    const pairUrl = `${window.location.origin}/cast?cast_pin=${pin}`
     QRCode.toDataURL(pairUrl, {
       width: 300,
       margin: 1,
@@ -165,20 +166,10 @@ export default function TvReceiverView() {
                     showOsd('⏸ 暂停')
                     break
                   case 'toggle':
-                    player.toggle()
-                    showOsd(player.video?.paused ? '⏸ 暂停' : '▶ 播放')
+                    toggleTv(player, showOsd)
                     break
                   case 'seek':
-                    if (typeof msg.payload.value === 'number') {
-                      player.seek = msg.payload.value
-                      const m = Math.floor(msg.payload.value / 60)
-                      const s = Math.floor(msg.payload.value % 60)
-                      showOsd(`⏩ 跳转至 ${m}:${s.toString().padStart(2, '0')}`)
-                    }
-                    break
-                  case 'skip_intro':
-                    player.seek = (player.currentTime || 0) + 90
-                    showOsd('⏩ 已跳过片头 (+90s)')
+                    seekTv(player, msg.payload.value ?? NaN, showOsd)
                     break
                   case 'volume':
                     if (typeof msg.payload.value === 'number') {
@@ -238,6 +229,7 @@ export default function TvReceiverView() {
       url: currentMedia.videoUrl,
       type: 'm3u8',
       autoplay: true,
+      hotkey: false,
       fullscreen: true,
       fullscreenWeb: true,
       airplay: false,
@@ -306,28 +298,7 @@ export default function TvReceiverView() {
 
     artRef.current = art
 
-    // 心跳进度回传 (每 1.5 秒向手机广播一次进度)
-    const progressTimer = window.setInterval(() => {
-      if (!channelRef.current || !artRef.current) return
-      const player = artRef.current
-      void channelRef.current.send({
-        type: 'broadcast',
-        event: 'cast_event',
-        payload: {
-          type: 'progress',
-          payload: {
-            isPlaying: Boolean(player.video && !player.video.paused),
-            currentTime: player.currentTime || 0,
-            duration: player.duration || 0,
-            mediaTitle: currentMedia.mediaTitle,
-            episodeTitle: currentMedia.episodeTitle,
-          },
-        },
-      })
-    }, 1500)
-
     return () => {
-      window.clearInterval(progressTimer)
       if (artRef.current) {
         artRef.current.hls?.destroy()
         artRef.current.destroy(true)
@@ -336,49 +307,37 @@ export default function TvReceiverView() {
     }
   }, [currentMedia, showOsd])
 
-  // LG 动感遥控器（Magic Remote）按键监听
+  // Keep paired idle TVs alive too; the phone may select a video later.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    if (!isConnected) return
+    const timer = setInterval(() => {
       const player = artRef.current
-      if (!player) return
+      void channelRef.current?.send({
+        payload: {
+          type: 'progress',
+          payload: {
+            isPlaying: Boolean(player?.video && !player.video.paused),
+            currentTime: finiteTime(player?.currentTime),
+            duration: finiteTime(player?.duration),
+            mediaTitle: currentMedia?.mediaTitle || '',
+            episodeTitle: currentMedia?.episodeTitle || '',
+          },
+        },
+      })
+    }, 1500)
+    return () => clearInterval(timer)
+  }, [isConnected, currentMedia])
 
-      switch (e.key) {
-        case 'Enter':
-        case ' ': // 遥控器确定键或空格
-          e.preventDefault()
-          player.toggle()
-          showOsd(player.video?.paused ? '⏸ 暂停' : '▶ 播放')
-          break
-        case 'ArrowLeft': // 快退 10s
-          e.preventDefault()
-          player.seek = Math.max(0, (player.currentTime || 0) - 10)
-          showOsd(`⏪ 快退 10s (${Math.floor(player.seek)}s)`)
-          break
-        case 'ArrowRight': // 快进 10s
-          e.preventDefault()
-          player.seek = Math.min(player.duration || 0, (player.currentTime || 0) + 10)
-          showOsd(`⏩ 快进 10s (${Math.floor(player.seek)}s)`)
-          break
-        case 'ArrowUp': // 音量加
-          e.preventDefault()
-          player.volume = Math.min(1, (player.volume || 0) + 0.1)
-          showOsd(`🔊 音量: ${Math.round(player.volume * 100)}%`)
-          break
-        case 'ArrowDown': // 音量减
-          e.preventDefault()
-          player.volume = Math.max(0, (player.volume || 0) - 0.1)
-          showOsd(`🔉 音量: ${Math.round(player.volume * 100)}%`)
-          break
-        case 'Escape':
-        case 'Backspace': // 返回键回到配对界面
-          e.preventDefault()
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (artRef.current)
+        handleTvKey(e, artRef.current, showOsd, () => {
+          loadedRef.current = ''
           setCurrentMedia(null)
-          break
-      }
+        })
     }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
   }, [showOsd])
 
   if (!syncClient) {
@@ -444,7 +403,7 @@ export default function TvReceiverView() {
                 <span
                   className={`size-2 rounded-full ${isConnected ? 'animate-pulse bg-emerald-400' : 'bg-zinc-500'}`}
                 />
-                {isConnected ? `已连接 (${connectedDevice})` : '等待手机投屏'}
+                {isConnected ? `已连接 (${connectedDevice}) · 等待选片` : '等待手机配对'}
               </div>
             </div>
           </header>
@@ -489,7 +448,7 @@ export default function TvReceiverView() {
                 )}
               </div>
               <p className="text-xs font-medium text-zinc-400 md:text-sm">
-                扫码后在手机选择视频，再在电视确认配对
+                手机扫码配对，在电视确认后再选片
               </p>
             </div>
 
@@ -538,7 +497,8 @@ export default function TvReceiverView() {
             <div className="flex items-center gap-2">
               <Sparkles className="size-4 shrink-0 text-amber-400" />
               <span>
-                <strong>遥控器技巧：</strong>在电视遥控器或浏览器菜单中将本页添加为<strong>「书签」</strong>
+                <strong>遥控器技巧：</strong>在电视遥控器或浏览器菜单中将本页添加为
+                <strong>「书签」</strong>
                 ，下次开机一键直达！
               </span>
             </div>

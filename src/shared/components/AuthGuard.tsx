@@ -33,7 +33,7 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
   const isPartyGuestRoute =
     typeof window !== 'undefined' &&
     (window.location.pathname.startsWith('/party/') || window.location.pathname.startsWith('/p/'))
-  if (isPartyGuestRoute) return <>{children}</>
+  if (isPartyGuestRoute || window.location.pathname.replace(/\/+$/, '') === '/tv') return <>{children}</>
   if (!initialized && !adminLogin) return <LoadingFallback />
   if (account && (!adminLogin || account.role === 'admin'))
     return <MaintenanceGuard>{children}</MaintenanceGuard>

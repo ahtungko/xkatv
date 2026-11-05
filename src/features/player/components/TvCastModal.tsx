@@ -1,3 +1,4 @@
+import { finiteTime, seekTarget } from '../lib/tvControls'
 import { useState, useEffect } from 'react'
 import {
   Dialog,
@@ -15,7 +16,6 @@ import {
   RotateCcw,
   RotateCw,
   Volume2,
-  FastForward,
   SkipForward,
   SkipBack,
   Power,
@@ -40,7 +40,7 @@ interface TvCastModalProps {
 }
 
 function formatTime(seconds: number): string {
-  if (isNaN(seconds) || seconds < 0) return '00:00'
+  if (!Number.isFinite(seconds) || seconds < 0) return '00:00'
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
@@ -63,6 +63,12 @@ export function TvCastModal({
 }: TvCastModalProps) {
   const [inputPin, setInputPin] = useState('')
   const [volume, setVolume] = useState(1)
+  const currentTime = finiteTime(remoteState.currentTime)
+  const duration = finiteTime(remoteState.duration)
+  const seek = (value: number) => {
+    const target = seekTarget(value, duration)
+    if (target !== null) onSendCommand('seek', target)
+  }
 
   useEffect(() => {
     if (connectedPin) {
@@ -84,20 +90,31 @@ export function TvCastModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="max-w-md p-6 bg-zinc-950 border-zinc-800 text-white rounded-3xl shadow-2xl">
+      <DialogContent
+        onKeyDownCapture={event => {
+          if (!isCasting || (event.code !== 'Space' && event.key !== ' ')) return
+          if (
+            event.target instanceof HTMLElement &&
+            event.target.closest('input,textarea,select,[contenteditable="true"]')
+          )
+            return
+          event.preventDefault()
+          event.stopPropagation()
+          if (!event.repeat) onSendCommand('toggle')
+        }}
+        className="max-w-md rounded-3xl border-zinc-800 bg-zinc-950 p-6 text-white shadow-2xl"
+      >
         <DialogHeader className="space-y-1">
           <div className="flex items-center gap-2">
-            <div className="flex size-8 items-center justify-center rounded-xl bg-blue-500/15 text-blue-400 border border-blue-500/20">
+            <div className="flex size-8 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/15 text-blue-400">
               <Tv className="size-4" />
             </div>
             <DialogTitle className="text-lg font-bold">
               {isCasting ? '大屏电视遥控器' : '投屏到电视'}
             </DialogTitle>
           </div>
-          <DialogDescription className="text-zinc-400 text-xs">
-            {isCasting
-              ? '使用手机控制播放进度与剧集切换'
-              : '电视内置浏览器打开网页即可全屏投映'}
+          <DialogDescription className="text-xs text-zinc-400">
+            {isCasting ? '使用手机控制播放进度与剧集切换' : '电视内置浏览器打开网页即可全屏投映'}
           </DialogDescription>
         </DialogHeader>
 
@@ -105,11 +122,11 @@ export function TvCastModal({
           /* ==================== 遥控板模式 ==================== */
           <div className="space-y-5 pt-2">
             {/* 状态徽标与设备 */}
-            <div className="flex items-center justify-between rounded-2xl bg-zinc-900/80 p-3.5 border border-zinc-800/80">
+            <div className="flex items-center justify-between rounded-2xl border border-zinc-800/80 bg-zinc-900/80 p-3.5">
               <div className="flex items-center gap-2.5">
                 <span className="relative flex size-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full size-2.5 bg-emerald-500" />
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
                 </span>
                 <div>
                   <p className="text-xs font-semibold text-zinc-200">已连接至电视</p>
@@ -121,7 +138,7 @@ export function TvCastModal({
                 variant="destructive"
                 size="sm"
                 onClick={onDisconnect}
-                className="h-7 text-xs rounded-full gap-1.5 px-3 bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white border border-red-500/30 transition-all"
+                className="h-7 gap-1.5 rounded-full border border-red-500/30 bg-red-600/20 px-3 text-xs text-red-400 transition-all hover:bg-red-600 hover:text-white"
               >
                 <Power className="size-3.5" />
                 断开投屏
@@ -129,33 +146,34 @@ export function TvCastModal({
             </div>
 
             {/* 正在播放的内容卡片 */}
-            <div className="rounded-2xl bg-gradient-to-br from-blue-950/30 via-zinc-900 to-zinc-900/60 p-4 border border-blue-500/20 space-y-3">
-              <div className="flex items-center gap-2 text-blue-400 text-xs font-medium">
+            <div className="space-y-3 rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/30 via-zinc-900 to-zinc-900/60 p-4">
+              <div className="flex items-center gap-2 text-xs font-medium text-blue-400">
                 <Sparkles className="size-3.5" />
                 <span>电视端正在播放</span>
               </div>
               <div>
-                <h3 className="font-bold text-base text-zinc-100 line-clamp-1">
-                  {remoteState.mediaTitle || '当前剧集'}
+                <h3 className="line-clamp-1 text-base font-bold text-zinc-100">
+                  {remoteState.mediaTitle || '等待选片'}
                 </h3>
-                <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">
-                  {remoteState.episodeTitle || '正片播放中'}
+                <p className="mt-0.5 line-clamp-1 text-xs text-zinc-400">
+                  {remoteState.episodeTitle || '选好视频后点击「在电视播放」'}
                 </p>
               </div>
 
               {/* 进度显示条 */}
               <div className="space-y-1.5 pt-1">
-                <div className="flex items-center justify-between text-xs text-zinc-400 font-mono">
+                <div className="flex items-center justify-between font-mono text-xs text-zinc-400">
                   <span>{formatTime(remoteState.currentTime)}</span>
                   <span>{formatTime(remoteState.duration)}</span>
                 </div>
                 <input
                   type="range"
                   min={0}
-                  max={remoteState.duration || 100}
-                  value={remoteState.currentTime || 0}
-                  onChange={e => onSendCommand('seek', Number(e.target.value))}
-                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  max={duration || 1}
+                  disabled={!duration}
+                  value={Math.min(currentTime, duration)}
+                  onChange={e => seek(Number(e.target.value))}
+                  className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-zinc-800 accent-blue-500"
                 />
               </div>
             </div>
@@ -165,8 +183,9 @@ export function TvCastModal({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => onSendCommand('seek', Math.max(0, remoteState.currentTime - 15))}
-                className="size-12 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300"
+                disabled={!duration}
+                onClick={() => seek(currentTime - 15)}
+                className="size-12 rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
                 title="快退 15 秒"
               >
                 <RotateCcw className="size-5" />
@@ -176,37 +195,36 @@ export function TvCastModal({
                 variant="default"
                 size="icon"
                 onClick={() => onSendCommand('toggle')}
-                className="size-16 rounded-full bg-blue-600 hover:bg-blue-500 text-white shadow-xl shadow-blue-600/30 active:scale-95 transition-all"
+                className="size-16 rounded-full bg-blue-600 text-white shadow-xl shadow-blue-600/30 transition-all hover:bg-blue-500 active:scale-95"
                 title={remoteState.isPlaying ? '暂停' : '播放'}
               >
                 {remoteState.isPlaying ? (
                   <Pause className="size-7 fill-current" />
                 ) : (
-                  <Play className="size-7 fill-current ml-0.5" />
+                  <Play className="ml-0.5 size-7 fill-current" />
                 )}
               </Button>
 
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() =>
-                  onSendCommand('seek', Math.min(remoteState.duration, remoteState.currentTime + 15))
-                }
-                className="size-12 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300"
+                onClick={() => seek(currentTime + 15)}
+                className="size-12 rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
                 title="快进 15 秒"
+                disabled={!duration}
               >
                 <RotateCw className="size-5" />
               </Button>
             </div>
 
-            {/* 次级按键区：切集与跳过片头 */}
-            <div className="grid grid-cols-3 gap-2 pt-1">
+            {/* 次级按键区：切集 */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
               <Button
                 variant="outline"
                 size="sm"
                 disabled={!hasPrevEpisode}
                 onClick={onPlayPrevEpisode}
-                className="h-9 rounded-xl border-zinc-800 bg-zinc-900/60 text-xs gap-1.5"
+                className="h-9 gap-1.5 rounded-xl border-zinc-800 bg-zinc-900/60 text-xs"
               >
                 <SkipBack className="size-3.5" />
                 上一集
@@ -215,19 +233,9 @@ export function TvCastModal({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => onSendCommand('skip_intro')}
-                className="h-9 rounded-xl border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 text-xs gap-1.5"
-              >
-                <FastForward className="size-3.5" />
-                跳片头 (+90s)
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
                 disabled={!hasNextEpisode}
                 onClick={onPlayNextEpisode}
-                className="h-9 rounded-xl border-zinc-800 bg-zinc-900/60 text-xs gap-1.5"
+                className="h-9 gap-1.5 rounded-xl border-zinc-800 bg-zinc-900/60 text-xs"
               >
                 <SkipForward className="size-3.5" />
                 下一集
@@ -235,8 +243,8 @@ export function TvCastModal({
             </div>
 
             {/* 音量控制 */}
-            <div className="flex items-center gap-3 p-3 rounded-2xl bg-zinc-900/50 border border-zinc-800/60 text-xs text-zinc-400">
-              <Volume2 className="size-4 text-zinc-400 shrink-0" />
+            <div className="flex items-center gap-3 rounded-2xl border border-zinc-800/60 bg-zinc-900/50 p-3 text-xs text-zinc-400">
+              <Volume2 className="size-4 shrink-0 text-zinc-400" />
               <input
                 type="range"
                 min={0}
@@ -244,7 +252,7 @@ export function TvCastModal({
                 step={0.05}
                 value={volume}
                 onChange={e => handleVolumeChange(Number(e.target.value))}
-                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                className="h-1 w-full cursor-pointer appearance-none rounded-lg bg-zinc-800 accent-blue-500"
               />
               <span className="w-8 text-right font-mono text-[11px]">
                 {Math.round(volume * 100)}%
@@ -266,13 +274,13 @@ export function TvCastModal({
                     placeholder="例如 7829"
                     value={inputPin}
                     onChange={e => setInputPin(e.target.value.toUpperCase())}
-                    className="h-12 text-center text-xl font-bold tracking-widest uppercase bg-zinc-900 border-zinc-800 focus:border-blue-500 rounded-2xl"
+                    className="h-12 rounded-2xl border-zinc-800 bg-zinc-900 text-center text-xl font-bold tracking-widest uppercase focus:border-blue-500"
                     autoFocus
                   />
                   <Button
                     type="submit"
                     disabled={inputPin.trim().length !== 4}
-                    className="h-12 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm shrink-0"
+                    className="h-12 shrink-0 rounded-2xl bg-blue-600 px-6 text-sm font-semibold text-white hover:bg-blue-500"
                   >
                     连接投屏
                   </Button>
@@ -283,7 +291,7 @@ export function TvCastModal({
             {/* 最近连接的设备列表 */}
             {recentPins.length > 0 && (
               <div className="space-y-2">
-                <span className="text-[11px] text-zinc-500 font-medium">最近连接过的电视：</span>
+                <span className="text-[11px] font-medium text-zinc-500">最近连接过的电视：</span>
                 <div className="flex flex-wrap gap-2">
                   {recentPins.map(p => (
                     <Button
@@ -294,7 +302,7 @@ export function TvCastModal({
                         setInputPin(p)
                         onConnect(p)
                       }}
-                      className="h-7 rounded-full border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-xs text-zinc-300 gap-1.5 px-3"
+                      className="h-7 gap-1.5 rounded-full border-zinc-800 bg-zinc-900/60 px-3 text-xs text-zinc-300 hover:bg-zinc-800"
                     >
                       <Tv className="size-3 text-blue-400" />
                       <span>{p}</span>
@@ -305,8 +313,8 @@ export function TvCastModal({
             )}
 
             {/* 3 步使用指引 */}
-            <div className="rounded-2xl bg-zinc-900/50 p-4 border border-zinc-800/80 space-y-2.5 text-xs text-zinc-400">
-              <p className="font-semibold text-zinc-300 flex items-center gap-1.5">
+            <div className="space-y-2.5 rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-4 text-xs text-zinc-400">
+              <p className="flex items-center gap-1.5 font-semibold text-zinc-300">
                 <Sparkles className="size-3.5 text-blue-400" />
                 如何使用？
               </p>
@@ -314,11 +322,11 @@ export function TvCastModal({
                 <p>1. 在电视主页打开自带的「网络浏览器」。</p>
                 <p>
                   2. 输入专属接收网址：
-                  <span className="text-blue-400 font-mono font-medium ml-1">
+                  <span className="ml-1 font-mono font-medium text-blue-400">
                     {typeof window !== 'undefined' ? `${window.location.host}/tv` : '/tv'}
                   </span>
                 </p>
-                <p>3. 屏幕即会显示 4 位数字配对码，输入即可投屏。</p>
+                <p>3. 输入配对码，在电视确认连接后选择视频，再点击「在电视播放」。</p>
               </div>
             </div>
           </div>

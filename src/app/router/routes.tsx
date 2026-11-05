@@ -34,6 +34,7 @@ const AboutSettings = lazy(() => import('@/features/settings/views/AboutSettings
 // Player views
 const UnifiedPlayer = lazy(() => import('@/features/player/components/UnifiedPlayer'))
 const GuestPartyView = lazy(() => import('@/features/player/views/GuestPartyView'))
+const TvPairView = lazy(() => import('@/features/player/views/TvPairView'))
 const TvReceiverView = lazy(() => import('@/features/player/views/TvReceiverView'))
 
 // Suspense wrapper for lazy components
@@ -108,6 +109,7 @@ const router = createBrowserRouter([
     ),
     ErrorBoundary: RootErrorBoundary,
     children: [
+      { path: 'cast', element: <SuspenseWrapper><TvPairView /></SuspenseWrapper> },
       {
         path: 'admin',
         element: (
