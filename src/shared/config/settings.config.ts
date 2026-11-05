@@ -55,6 +55,9 @@ export const DEFAULT_SETTINGS = {
     isLiveStreamEnabled:
       envSettings?.system?.isLiveStreamEnabled ??
       (INITIAL_CONFIG?.liveEnabled ?? (getPublicEnv('XKA_LIVE_ENABLED') !== 'false')),
+    isTvCastEnabled:
+      envSettings?.system?.isTvCastEnabled ??
+      (INITIAL_CONFIG?.tvCastEnabled ?? (getPublicEnv('XKA_TV_CAST_ENABLED') !== 'false')),
     tmdbLanguage: envSettings?.system?.tmdbLanguage ?? 'zh-CN',
     tmdbImageQuality: (envSettings?.system?.tmdbImageQuality ?? 'medium') as
       | 'low'

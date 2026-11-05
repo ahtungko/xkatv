@@ -23,6 +23,7 @@ import { useSeriesUpdateChecker } from '@/features/favorites/hooks/useSeriesUpda
 import { GlobalWatchPartyPill } from '@/features/player/components'
 import { useWatchPartyStore } from '@/features/player/store/watchPartyStore'
 import { initLiveSettingSync } from '@/features/live/services/liveSettingService'
+import { initTvCastSettingSync } from '@/features/player/services/tvCastSettingService'
 
 export default function MainLayout() {
   const hasNewVersion = useVersionStore(state => state.hasNewVersion)
@@ -57,7 +58,12 @@ export default function MainLayout() {
 
   // 全局电视直播功能状态同步（跨标签页与 Supabase）
   useEffect(() => {
-    return initLiveSettingSync()
+    const cleanupLive = initLiveSettingSync()
+    const cleanupTvCast = initTvCastSettingSync()
+    return () => {
+      cleanupLive()
+      cleanupTvCast()
+    }
   }, [])
 
   // 初始化逻辑 (从 MyRouter 迁移)

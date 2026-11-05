@@ -39,6 +39,7 @@ export interface SettingsConfig {
     isUpdateLogEnabled?: boolean
     isScrollChromeAnimationEnabled?: boolean
     isLiveStreamEnabled?: boolean
+    isTvCastEnabled?: boolean
     tmdbLanguage?: string
     tmdbImageQuality?: 'low' | 'medium' | 'high'
   }
@@ -86,6 +87,7 @@ export interface ExportedConfig {
   subscriptions?: SubscriptionConfig[]
   liveSubscriptions?: LiveSubscriptionConfig[]
   liveEnabled?: boolean
+  tvCastEnabled?: boolean
   adFilteringEnabled?: boolean
   meta?: MetaConfig
 }

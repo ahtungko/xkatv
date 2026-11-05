@@ -5,11 +5,25 @@ import { TvCastModal } from './TvCastModal'
 import { Tv } from 'lucide-react'
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/shared/components/ui/sheet'
 import { Button } from '@/shared/components/ui/button'
+import { useSettingStore } from '@/shared/store/settingStore'
+import { useAuthStore } from '@/shared/store/authStore'
 export function GlobalTvCastControl() {
+  const isTvCastEnabled = useSettingStore(state => state.system.isTvCastEnabled)
+  const isAdmin = useAuthStore(state => state.account?.role === 'admin')
   const state = useTvCastStore()
+  const { status, disconnect } = state
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
   useEffect(() => {
+    if (!isTvCastEnabled && !isAdmin) {
+      try {
+        sessionStorage.removeItem('tv_cast_intent')
+      } catch {
+        /* Storage unavailable */
+      }
+      return
+    }
+
     try {
       const intent = JSON.parse(sessionStorage.getItem('tv_cast_intent') || 'null')
       if (intent && Date.now() - intent.time < 300000 && /^\d{4}$/.test(intent.pin)) {
@@ -20,7 +34,15 @@ export function GlobalTvCastControl() {
     } catch {
       /* Storage unavailable */
     }
-  }, [navigate])
+  }, [isTvCastEnabled, isAdmin, navigate])
+
+  useEffect(() => {
+    if (!isTvCastEnabled && !isAdmin && status !== 'idle') {
+      disconnect()
+    }
+  }, [isTvCastEnabled, isAdmin, status, disconnect])
+  if (!isTvCastEnabled && !isAdmin) return null
+
   return (
     <>
       <Sheet

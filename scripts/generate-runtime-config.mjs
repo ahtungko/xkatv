@@ -15,6 +15,7 @@ export const PUBLIC_ENV_KEYS = [
   'XKA_INITIAL_LIVE_SUBSCRIPTIONS',
   'XKA_LIVE_PROXY_URL',
   'XKA_LIVE_ENABLED',
+  'XKA_TV_CAST_ENABLED',
 ]
 
 export function collectRuntimeConfig(environment = process.env) {

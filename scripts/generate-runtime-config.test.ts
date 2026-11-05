@@ -29,4 +29,13 @@ describe('generate runtime config', () => {
     expect(script).toContain('\\u003c/script>')
     expect(script).toContain('\\u2028')
   })
+
+  it('正确导出 XKA_TV_CAST_ENABLED 环境变量', () => {
+    const config = collectRuntimeConfig({
+      XKA_TV_CAST_ENABLED: 'false',
+    })
+    expect(config).toEqual({
+      XKA_TV_CAST_ENABLED: 'false',
+    })
+  })
 })

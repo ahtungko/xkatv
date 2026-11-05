@@ -16,6 +16,7 @@ import { Cog, Image, KeyRound, Link2 } from 'lucide-react'
 import { SettingsItem, SettingsPageShell, SettingsSection } from '../components/common'
 import { getPublicEnv } from '@/shared/config/runtimeEnv'
 import { setGlobalLiveStreamEnabled } from '@/features/live/services/liveSettingService'
+import { setGlobalTvCastEnabled } from '@/features/player/services/tvCastSettingService'
 import { toast } from 'sonner'
 
 export default function SystemSettings() {
@@ -68,6 +69,26 @@ export default function SystemSettings() {
                   try {
                     await setGlobalLiveStreamEnabled(checked)
                     toast.success(checked ? '已开启全站电视直播' : '已关闭全站电视直播')
+                  } catch (e: unknown) {
+                    toast.error(e instanceof Error ? e.message : '更新状态失败')
+                  }
+                }}
+              />
+            }
+          />
+        )}
+        {isAdmin && (
+          <SettingsItem
+            title="大屏投屏功能"
+            description="控制全站用户是否开放大屏投屏与电视接收端。此设置将同步给所有用户。"
+            controlClassName="self-end mt-1"
+            control={
+              <Switch
+                checked={system.isTvCastEnabled}
+                onCheckedChange={async checked => {
+                  try {
+                    await setGlobalTvCastEnabled(checked)
+                    toast.success(checked ? '已开启全站大屏投屏' : '已关闭全站大屏投屏')
                   } catch (e: unknown) {
                     toast.error(e instanceof Error ? e.message : '更新状态失败')
                   }

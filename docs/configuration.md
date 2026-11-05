@@ -42,6 +42,18 @@ XKA_LIVE_ENABLED=false
 
 启用全站开关前执行 [站点设置迁移](../supabase/migrations/202611040001_site_settings.sql)，详见 [数据库配置](cloud-sync.md#global-live-stream-setting)。原生 HLS 播放需要同时更新应用与代理，详见 [Worker 部署](../workers/live-stream-proxy/README.md)。
 
+### 大屏投屏配置（`XKA_TV_CAST_ENABLED`）
+
+通过环境变量或管理员设置控制全站大屏投屏功能：
+
+```env
+XKA_TV_CAST_ENABLED=true
+```
+
+- **初始开关优先级**：`settings.system.isTvCastEnabled` → `INITIAL_CONFIG.tvCastEnabled` → `XKA_TV_CAST_ENABLED` → 默认开启。
+- **管理员全站控制**：管理员可在「系统设置」中开启或关闭「大屏投屏功能」，配置存储于 `site_settings` 表并实时推送到全站。
+- **关闭状态表现**：普通用户在播放器中不显示投屏按钮和投屏悬浮胶囊，访问 `/cast`（手机配对页）与 `/tv`（电视大屏端）会提示功能暂未开放；管理员访问依然可预览体验并支持一键开放。
+
 ### 默认视频源（`XKA_INITIAL_VIDEO_SOURCES`）
 
 支持两种格式：

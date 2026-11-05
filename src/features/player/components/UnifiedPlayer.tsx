@@ -225,6 +225,7 @@ export default function UnifiedPlayer() {
   const viewingHistory = useViewingHistoryStore(state => isPrivateMode ? emptyPrivateHistory : state.viewingHistory)
   const { playback } = useSettingStore()
   const isAdmin = useAuthStore(state => state.account?.role === 'admin')
+  const isTvCastEnabled = useSettingStore(state => state.system.isTvCastEnabled)
 
   const viewingHistoryRef = useRef(viewingHistory)
   const playbackRef = useRef(playback)
@@ -2065,6 +2066,7 @@ export default function UnifiedPlayer() {
                   variant={tvCast.isCasting ? 'default' : 'ghost'}
                   className={cn(
                     'h-8 gap-1.5 rounded-full px-2.5 text-xs sm:px-3 transition-colors',
+                    !isTvCastEnabled && !isAdmin && 'hidden',
                     tvCast.isCasting
                       ? 'bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm'
                       : 'hover:bg-white/10 text-muted-foreground hover:text-foreground',
@@ -2076,7 +2078,9 @@ export default function UnifiedPlayer() {
                   <span>
                     {tvCast.isCasting
                       ? `在电视播放 (${tvCast.connectedPin})`
-                      : '投屏到电视'}
+                      : !isTvCastEnabled && isAdmin
+                        ? '投屏到电视 (仅管理员)'
+                        : '投屏到电视'}
                   </span>
                 </Button>
 

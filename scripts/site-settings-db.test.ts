@@ -103,4 +103,36 @@ describe('全局站点配置数据库迁移与权限 (202611040001_site_settings
     )
     expect(checkTrue.rows[0].value).toBe(true)
   })
+
+  it('管理员可以开启与关闭大屏投屏开关 is_tv_cast_enabled，并实时同步给读取函数', async () => {
+    // 初始读取未设置返回 null
+    await db.exec('reset role; set role anon')
+    const initial = await db.query<{ value: boolean | null }>(
+      "select public.get_site_setting('is_tv_cast_enabled') as value"
+    )
+    expect(initial.rows[0].value).toBeNull()
+
+    // 管理员修改为 false
+    await db.exec('reset role; set role authenticated')
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [adminId])
+    await db.query("select public.set_site_setting('is_tv_cast_enabled', 'false'::jsonb)")
+
+    // 普通用户读取显示为 false
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId])
+    const checkFalse = await db.query<{ value: boolean }>(
+      "select public.get_site_setting('is_tv_cast_enabled') as value"
+    )
+    expect(checkFalse.rows[0].value).toBe(false)
+
+    // 管理员重新开启为 true
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [adminId])
+    await db.query("select public.set_site_setting('is_tv_cast_enabled', 'true'::jsonb)")
+
+    // 访客读取显示为 true
+    await db.exec('reset role; set role anon')
+    const checkTrue = await db.query<{ value: boolean }>(
+      "select public.get_site_setting('is_tv_cast_enabled') as value"
+    )
+    expect(checkTrue.rows[0].value).toBe(true)
+  })
 })

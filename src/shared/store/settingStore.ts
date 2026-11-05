@@ -45,6 +45,7 @@ interface SystemSettings {
   isUpdateLogEnabled: boolean
   isScrollChromeAnimationEnabled: boolean
   isLiveStreamEnabled: boolean
+  isTvCastEnabled: boolean
   tmdbLanguage: string
   tmdbImageQuality: 'low' | 'medium' | 'high'
 }
@@ -128,7 +129,7 @@ export const useSettingStore = create<SettingStore>()(
       })),
       {
         name: 'xkatv-setting-store',
-        version: 16,
+        version: 17,
         migrate: (persistedState: unknown, version: number) => {
           const state = persistedState as Record<string, unknown>
           if (version < 2 && state.playback) {
@@ -227,6 +228,11 @@ export const useSettingStore = create<SettingStore>()(
           if (version < 16) {
             const system = (state.system ?? {}) as Record<string, unknown>
             system.isLiveStreamEnabled ??= DEFAULT_SETTINGS.system.isLiveStreamEnabled
+            state.system = system
+          }
+          if (version < 17) {
+            const system = (state.system ?? {}) as Record<string, unknown>
+            system.isTvCastEnabled ??= DEFAULT_SETTINGS.system.isTvCastEnabled
             state.system = system
           }
           return state

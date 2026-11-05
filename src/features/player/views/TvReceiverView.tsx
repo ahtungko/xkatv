@@ -10,6 +10,11 @@ import { createHlsLoaderClass, createM3u8Processor } from '@xkatv/cms-core/m3u8'
 import { type TvCastMediaPayload, type TvCastMessage } from '../lib/tvCastProtocol'
 import { Tv, QrCode, AlertTriangle, RefreshCw, Sparkles } from 'lucide-react'
 import { Button } from '@/shared/components/ui/button'
+import { Link } from 'react-router'
+import { useAuthStore } from '@/shared/store/authStore'
+import { useSettingStore } from '@/shared/store/settingStore'
+import { setGlobalTvCastEnabled, initTvCastSettingSync } from '../services/tvCastSettingService'
+import { toast } from 'sonner'
 
 const m3u8Processor = createM3u8Processor({ filterAds: true })
 
@@ -18,6 +23,22 @@ interface ArtplayerWithHls extends Artplayer {
 }
 
 export default function TvReceiverView() {
+  const isAdmin = useAuthStore(state => state.account?.role === 'admin')
+  const isTvCastEnabled = useSettingStore(state => state.system.isTvCastEnabled)
+  const [isTogglingGlobal, setIsTogglingGlobal] = useState(false)
+
+  const handleToggleGlobal = async (enabled: boolean) => {
+    setIsTogglingGlobal(true)
+    try {
+      await setGlobalTvCastEnabled(enabled)
+      toast.success(enabled ? '全站大屏投屏已开放' : '全站大屏投屏已关闭')
+    } catch (e) {
+      toast.error('修改设置失败: ' + (e instanceof Error ? e.message : '未知错误'))
+    } finally {
+      setIsTogglingGlobal(false)
+    }
+  }
+
   const [pin, setPin] = useState<string>('')
   const [sessionVersion, setSessionVersion] = useState(0)
   const [pending, setPending] = useState(false)
@@ -48,6 +69,34 @@ export default function TvReceiverView() {
       setIsOsdVisible(false)
     }, duration)
   }, [])
+
+  // 全局同步大屏投屏设置（/tv 独立路由不在 MainLayout 下，需要自行初始化同步）
+  useEffect(() => {
+    return initTvCastSettingSync()
+  }, [])
+
+  // 当功能被全局关闭且当前非管理员时，立即断开会话并完全重置接收端状态
+  useEffect(() => {
+    if (!isTvCastEnabled && !isAdmin) {
+      if (channelRef.current) {
+        channelRef.current.close()
+        channelRef.current = null
+      }
+      if (artRef.current) {
+        artRef.current.destroy(true)
+        artRef.current = null
+      }
+      setCurrentMedia(null)
+      setPin('')
+      setQrCodeUrl('')
+      setPending(false)
+      acceptedRef.current = false
+      loadedRef.current = ''
+      setIsConnected(false)
+      setConnectedDevice('')
+      setSessionVersion(v => v + 1)
+    }
+  }, [isTvCastEnabled, isAdmin])
 
   // 请求防息屏 WakeLock
   useEffect(() => {
@@ -100,6 +149,7 @@ export default function TvReceiverView() {
   }
 
   useEffect(() => {
+    if (!syncClient || (!isTvCastEnabled && !isAdmin)) return
     let cancelled = false
     let close: (() => void) | undefined
     setPairError('')
@@ -189,6 +239,8 @@ export default function TvReceiverView() {
                   artRef.current = null
                 }
                 setCurrentMedia(null)
+                acceptedRef.current = false
+                loadedRef.current = ''
                 showOsd('控制端已断开连接')
                 break
               }
@@ -199,6 +251,8 @@ export default function TvReceiverView() {
             setCurrentMedia(null)
             setIsConnected(false)
             setPending(false)
+            acceptedRef.current = false
+            loadedRef.current = ''
           },
         )
         channelRef.current = channel
@@ -212,7 +266,7 @@ export default function TvReceiverView() {
       close?.()
       channelRef.current = null
     }
-  }, [sessionVersion, showOsd])
+  }, [sessionVersion, showOsd, isTvCastEnabled, isAdmin])
 
   // 播放器挂载与生命周期管理
   useEffect(() => {
@@ -340,6 +394,25 @@ export default function TvReceiverView() {
     return () => window.removeEventListener('keydown', handler, true)
   }, [showOsd])
 
+  if (!isTvCastEnabled && !isAdmin) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 p-6 text-center text-white">
+        <div className="max-w-md space-y-4">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-white/10 text-zinc-400">
+            <Tv className="size-8" />
+          </div>
+          <h1 className="text-2xl font-bold">大屏投屏暂未开放</h1>
+          <p className="text-zinc-400 text-sm">
+            全站大屏投屏功能已由管理员暂时关闭，请稍后再来。
+          </p>
+          <Button asChild className="mt-4" variant="secondary">
+            <Link to="/">返回首页</Link>
+          </Button>
+        </div>
+      </main>
+    )
+  }
+
   if (!syncClient) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 p-6 text-center text-white">
@@ -353,7 +426,25 @@ export default function TvReceiverView() {
   }
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-zinc-950 font-sans text-white select-none">
+    <div className="relative min-h-screen w-full overflow-hidden bg-zinc-950 font-sans text-white select-none flex flex-col">
+      {/* Admin Closed Banner */}
+      {!isTvCastEnabled && isAdmin && (
+        <div className="flex shrink-0 items-center justify-between border-b border-amber-500/20 bg-amber-500/10 px-6 py-2.5 text-xs text-amber-500">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="size-4 shrink-0" />
+            <span>全站大屏投屏当前已对普通用户关闭（仅管理员可见预览）。</span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isTogglingGlobal}
+            className="h-6 border-amber-500/30 px-2 text-xs text-amber-500 hover:bg-amber-500/20"
+            onClick={() => void handleToggleGlobal(true)}
+          >
+            一键对全员开放
+          </Button>
+        </div>
+      )}
       {/* 顶部 OSD 提示浮层 */}
       {isOsdVisible && (
         <div className="pointer-events-none fixed top-8 left-1/2 z-50 -translate-x-1/2 transition-all duration-300">
