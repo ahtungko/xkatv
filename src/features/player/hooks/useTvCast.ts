@@ -16,7 +16,6 @@ export function useTvCast(props: UseTvCastProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const following = useRef(false)
   const lastSent = useRef('')
-  const lastTitle = useRef('')
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
@@ -29,13 +28,14 @@ export function useTvCast(props: UseTvCastProps) {
     if (!media) return
     const sent = await useTvCastStore
       .getState()
-      .playMedia({ ...media, initialTime: latest.current.getCurrentTime?.() ?? media.initialTime })
+      .requestMedia({
+        ...media,
+        initialTime: latest.current.getCurrentTime?.() ?? media.initialTime,
+      })
     if (sent && mounted.current) {
       following.current = true
-      lastTitle.current = media.mediaTitle
       lastSent.current = mediaIdentity(media)
       latest.current.onPauseLocalPlayer?.()
-      setIsModalOpen(true)
     }
   }, [])
   useEffect(
@@ -52,11 +52,11 @@ export function useTvCast(props: UseTvCastProps) {
       return
     }
     const media = props.currentMedia
-    if (media && following.current && media.mediaTitle !== lastTitle.current) {
-      following.current = false
-      return
+    if (media && lastSent.current !== mediaIdentity(media)) {
+      lastSent.current = mediaIdentity(media)
+      latest.current.onPauseLocalPlayer?.()
+      void castCurrent()
     }
-    if (following.current && media && lastSent.current !== mediaIdentity(media)) void castCurrent()
   }, [props.currentMedia, state.status, castCurrent])
   return {
     isModalOpen,

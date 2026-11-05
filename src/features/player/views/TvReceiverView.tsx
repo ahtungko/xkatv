@@ -430,68 +430,77 @@ export default function TvReceiverView() {
               </Button>
             </div>
           )}
-          {/* 中央大屏配对卡片 */}
-          <div className="my-auto flex w-full max-w-4xl flex-col items-center justify-center gap-8 md:flex-row md:gap-14">
-            {/* 二维码展示区 */}
-            <div className="flex flex-col items-center gap-3 rounded-3xl border border-white/10 bg-zinc-900/80 p-5 shadow-2xl backdrop-blur-md">
-              <div className="rounded-2xl border border-white/10 bg-zinc-950 p-3 shadow-inner">
-                {qrCodeUrl ? (
-                  <img
-                    src={qrCodeUrl}
-                    alt="投屏二维码"
-                    className="size-48 rounded-xl object-contain sm:size-56 md:size-64"
-                  />
-                ) : (
-                  <div className="flex size-48 items-center justify-center text-zinc-500 sm:size-56 md:size-64">
-                    <QrCode className="size-16 animate-pulse" />
-                  </div>
-                )}
-              </div>
-              <p className="text-xs font-medium text-zinc-400 md:text-sm">
-                手机扫码配对，在电视确认后再选片
-              </p>
+          {isConnected ? (
+            <div className="my-auto text-center">
+              <Tv className="mx-auto mb-6 size-24 text-blue-400" />
+              <h2 className="text-3xl font-bold">准备好下一场精彩</h2>
+              <p className="mt-4 text-zinc-400">在手机上选择影片，即可在这里播放</p>
             </div>
-
-            {/* 4 位数字配对码展示区 */}
-            <div className="flex flex-col items-center space-y-6 text-center md:items-start md:text-left">
-              <div className="space-y-1">
-                <span className="text-xs font-semibold tracking-wider text-blue-400 uppercase">
-                  TV Pairing Code
-                </span>
-                <h2 className="text-2xl font-extrabold tracking-tight md:text-3xl">
-                  4 位数字配对码
-                </h2>
-                <p className="text-sm text-zinc-400">
-                  在手机/电脑播放器上点击「投屏到电视」并输入：
-                </p>
-              </div>
-
-              {/* 醒目的 PIN 码方块 */}
-              <div className="flex items-center gap-3">
-                {pin.split('').map((digit, idx) => (
-                  <div
-                    key={idx}
-                    className="flex size-14 items-center justify-center rounded-2xl border-2 border-blue-500/40 bg-gradient-to-b from-zinc-800 to-zinc-900 text-3xl font-black tracking-wider text-white shadow-lg sm:size-16 sm:text-4xl md:size-20 md:text-5xl"
-                  >
-                    {digit}
+          ) : (
+            <>
+              {/* 中央大屏配对卡片 */}
+              <div className="my-auto flex w-full max-w-4xl flex-col items-center justify-center gap-8 md:flex-row md:gap-14">
+                {/* 二维码展示区 */}
+                <div className="flex flex-col items-center gap-3 rounded-3xl border border-white/10 bg-zinc-900/80 p-5 shadow-2xl backdrop-blur-md">
+                  <div className="rounded-2xl border border-white/10 bg-zinc-950 p-3 shadow-inner">
+                    {qrCodeUrl ? (
+                      <img
+                        src={qrCodeUrl}
+                        alt="投屏二维码"
+                        className="size-48 rounded-xl object-contain sm:size-56 md:size-64"
+                      />
+                    ) : (
+                      <div className="flex size-48 items-center justify-center text-zinc-500 sm:size-56 md:size-64">
+                        <QrCode className="size-16 animate-pulse" />
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
+                  <p className="text-xs font-medium text-zinc-400 md:text-sm">
+                    手机扫码配对，在电视确认后再选片
+                  </p>
+                </div>
 
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRegeneratePin}
-                  className="h-8 gap-1.5 rounded-full border-zinc-800 bg-zinc-900/60 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white"
-                >
-                  <RefreshCw className="size-3.5" />
-                  刷新配对码
-                </Button>
-              </div>
-            </div>
-          </div>
+                {/* 4 位数字配对码展示区 */}
+                <div className="flex flex-col items-center space-y-6 text-center md:items-start md:text-left">
+                  <div className="space-y-1">
+                    <span className="text-xs font-semibold tracking-wider text-blue-400 uppercase">
+                      TV Pairing Code
+                    </span>
+                    <h2 className="text-2xl font-extrabold tracking-tight md:text-3xl">
+                      4 位数字配对码
+                    </h2>
+                    <p className="text-sm text-zinc-400">
+                      在手机/电脑播放器上点击「投屏到电视」并输入：
+                    </p>
+                  </div>
 
+                  {/* 醒目的 PIN 码方块 */}
+                  <div className="flex items-center gap-3">
+                    {pin.split('').map((digit, idx) => (
+                      <div
+                        key={idx}
+                        className="flex size-14 items-center justify-center rounded-2xl border-2 border-blue-500/40 bg-gradient-to-b from-zinc-800 to-zinc-900 text-3xl font-black tracking-wider text-white shadow-lg sm:size-16 sm:text-4xl md:size-20 md:text-5xl"
+                      >
+                        {digit}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRegeneratePin}
+                      className="h-8 gap-1.5 rounded-full border-zinc-800 bg-zinc-900/60 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                    >
+                      <RefreshCw className="size-3.5" />
+                      刷新配对码
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
           {/* 底部使用引导与遥控器技巧 */}
           <footer className="flex w-full max-w-4xl flex-col items-center justify-between gap-3 rounded-2xl border border-white/5 bg-zinc-900/40 p-4 text-xs text-zinc-400 md:flex-row md:p-5">
             <div className="flex items-center gap-2">

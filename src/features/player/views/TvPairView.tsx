@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { useTvCastStore } from '../store/tvCastStore'
 import { Button } from '@/shared/components/ui/button'
 import { Input } from '@/shared/components/ui/input'
 export default function TvPairView() {
   const { status, pin, error, connect, disconnect } = useTvCastStore()
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (status === 'connected') navigate('/', { replace: true })
+  }, [status, navigate])
   const [input, setInput] = useState(pin)
   useEffect(() => {
     try {
@@ -13,11 +17,12 @@ export default function TvPairView() {
       if (intent && Date.now() - intent.time < 300000 && /^\d{4}$/.test(intent.pin)) {
         setInput(intent.pin)
         void connect(intent.pin)
+        navigate('/', { replace: true })
       }
     } catch {
       /* Storage unavailable */
     }
-  }, [connect])
+  }, [connect, navigate])
   return (
     <section className="mx-auto max-w-md space-y-5 py-12">
       <h1 className="text-2xl font-bold">连接电视</h1>

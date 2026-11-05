@@ -25,7 +25,7 @@ afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
-it('pairs without media, casts only on request, and survives leaving the player', async () => {
+it('pairs without media, automatically casts selection, and survives leaving the player', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   const pause = vi.fn()
   let api: ReturnType<typeof useTvCast>
@@ -49,9 +49,9 @@ it('pairs without media, casts only on request, and survives leaving the player'
   expect(mocks.send).not.toHaveBeenCalled()
   const root = createRoot(document.createElement('div'))
   await act(async () => root.render(createElement(Harness)))
-  expect(mocks.send).not.toHaveBeenCalled()
+  expect(mocks.send).toHaveBeenCalledTimes(1)
   await act(async () => api.castCurrent())
-  expect(pause).toHaveBeenCalledTimes(1)
+  expect(pause).toHaveBeenCalledTimes(2)
   expect(mocks.send).toHaveBeenCalledTimes(1)
   await act(async () =>
     mocks.handler({
@@ -107,4 +107,26 @@ it('preserves an accepted session during screen lock and grants foreground recov
   } finally {
     spy.mockRestore()
   }
+})
+
+it('requires confirmation to replace even paused media and cancels without sending', async () => {
+  await useTvCastStore.getState().connect('1234')
+  mocks.handler({ type: 'connect_ack', deviceName: 'TV', isPlaying: false })
+  const media = {
+    videoUrl: 'https://test/a',
+    mediaTitle: 'A',
+    episodeTitle: '1',
+    episodeIndex: 0,
+    initialTime: 0,
+  }
+  await useTvCastStore.getState().requestMedia(media)
+  const replacement = { ...media, videoUrl: 'https://test/b', mediaTitle: 'B' }
+  const cancelled = useTvCastStore.getState().requestMedia(replacement)
+  expect(mocks.send).toHaveBeenCalledTimes(1)
+  useTvCastStore.getState().resolveSwitch(false)
+  expect(await cancelled).toBe(false)
+  const confirmed = useTvCastStore.getState().requestMedia(replacement)
+  useTvCastStore.getState().resolveSwitch(true)
+  expect(await confirmed).toBe(true)
+  expect(mocks.send).toHaveBeenCalledTimes(2)
 })

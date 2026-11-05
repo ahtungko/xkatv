@@ -19,6 +19,7 @@ let deadline: ReturnType<typeof setTimeout> | undefined
 let watchdog: ReturnType<typeof setInterval> | undefined
 let lastSeen = 0
 let ended: (() => void) | undefined
+let resolvePending: ((allow: boolean) => void) | undefined
 let owner: string | undefined
 const emptyProgress: TvCastProgressPayload = {
   isPlaying: false,
@@ -32,6 +33,9 @@ interface CastState {
   pin: string
   error: string
   remoteState: TvCastProgressPayload
+  pendingMedia: TvCastMediaPayload | null
+  resolveSwitch: (allow: boolean) => void
+  requestMedia: (media: TvCastMediaPayload) => Promise<boolean>
   mediaKey: string
   connect: (pin: string) => Promise<void>
   disconnect: () => void
@@ -39,12 +43,32 @@ interface CastState {
   command: (action: TvCastCommandAction, value?: number) => void
 }
 export const useTvCastStore = create<CastState>((set, get) => ({
+  pendingMedia: null,
+  resolveSwitch: allow => {
+    const resolve = resolvePending
+    resolvePending = undefined
+    set({ pendingMedia: null })
+    resolve?.(allow)
+  },
+  requestMedia: async media => {
+    if (get().mediaKey === mediaIdentity(media)) return false
+    get().resolveSwitch(false)
+    if (get().mediaKey || get().remoteState.mediaTitle) {
+      const accepted = await new Promise<boolean>(resolve => {
+        resolvePending = resolve
+        set({ pendingMedia: media })
+      })
+      if (!accepted) return false
+    }
+    return get().playMedia(media)
+  },
   status: 'idle',
   pin: '',
   error: '',
   remoteState: emptyProgress,
   mediaKey: '',
   disconnect: () => {
+    get().resolveSwitch(false)
     generation++
     clearTimeout(deadline)
     clearInterval(watchdog)
@@ -88,13 +112,15 @@ export const useTvCastStore = create<CastState>((set, get) => ({
             watchdog = setInterval(() => {
               if (!document.hidden && Date.now() - lastSeen > 20000) fail('电视已离线，请重新配对')
             }, 3000)
-            toast.success('已连接电视，可以开始选片')
           }
           if (msg.type === 'progress') {
             lastSeen = Date.now()
             set({ remoteState: msg.payload })
           }
-          if (msg.type === 'ended') ended?.()
+          if (msg.type === 'ended') {
+            set({ mediaKey: '', remoteState: emptyProgress })
+            ended?.()
+          }
           if (msg.type === 'error') toast.error(msg.message)
           if (msg.type === 'disconnect') fail('电视已断开连接')
         },
