@@ -15,8 +15,6 @@ import { useFavoritesStore } from '../store/favoritesStore'
 import { useSeriesUpdatesStore } from '../store/seriesUpdatesStore'
 import {
   canTrackFavorite,
-  completedReminderEpisodes,
-  matchingTrackingUpdate,
   trackingKey,
   trackingBindingKey,
 } from '../lib/seriesTracking'
@@ -38,9 +36,6 @@ export function useSeriesUpdateChecker() {
   const isPrivateMode = usePrivateModeStore(state => state.isPrivateMode)
   const ownerId = useAuthStore(state => state.account?.id)
   const favorites = useFavoritesStore(state => isPrivateMode ? emptyFavorites : state.favorites)
-  const history = useViewingHistoryStore(state => state.viewingHistory)
-  const entries = useSeriesUpdatesStore(state => state.entries)
-  const cacheOwner = useSeriesUpdatesStore(state => state.ownerId)
   const sources = useApiStore(state => state.videoAPIs)
   const network = useSettingStore(state => state.network)
   const tmdbEnabled = useSettingStore(state => state.system.tmdbEnabled)
@@ -66,23 +61,6 @@ export function useSeriesUpdateChecker() {
   )
   const sourceSignature = JSON.stringify(sources.filter(source => source.isEnabled))
   const networkSignature = JSON.stringify(network)
-
-  useEffect(() => {
-    if (isPrivateMode || !ownerId || cacheOwner !== ownerId) return
-    for (const item of favorites) {
-      if (
-        !item.tracking?.enabled ||
-        !canTrackFavorite(item) ||
-        (!tmdbEnabled && item.sourceType !== 'cms')
-      ) continue
-      const key = trackingKey(item)
-      const update = matchingTrackingUpdate(item, entries[key])
-      if (!update) continue
-      const completed = completedReminderEpisodes(item, update, history)
-      if (completed.length)
-        useSeriesUpdatesStore.getState().markEpisodesRead(ownerId, key, update, completed)
-    }
-  }, [ownerId, cacheOwner, favorites, history, entries, tmdbEnabled, isPrivateMode])
 
   useEffect(() => {
     if (isPrivateMode) return

@@ -150,28 +150,6 @@ export function favoriteHistory(item: FavoriteItem, history: ViewingHistoryItem[
   })
 }
 
-/** 已看完的单集和明确校准的连续进度可以消除对应的新集提醒。 */
-export function completedReminderEpisodes(
-  item: FavoriteItem,
-  update: SeriesUpdate,
-  history: ViewingHistoryItem[],
-): number[] {
-  const unread = unreadEpisodeNumbers(update)
-  const calibration = item.tracking?.progress?.[trackingSeasonKey(item)]
-  const completedThrough = calibration?.completedEpisode ?? 0
-  const completed = new Set(unread.filter(number => number <= completedThrough))
-  for (const record of favoriteHistory(item, history)) {
-    if (calibration && record.timestamp <= calibration.calibratedAt) continue
-    if (record.duration <= 0 || record.playbackPosition / record.duration < 0.9) continue
-    const samePlaylist = record.sourceCode === update.sourceCode && record.vodId === update.vodId
-    const number =
-      episodeNumber(record.episodeName) ??
-      (samePlaylist ? update.episodes?.find(ep => ep.index === record.episodeIndex)?.number : undefined)
-    if (number && unread.includes(number)) completed.add(number)
-  }
-  return [...completed]
-}
-
 export function trackingProgress(
   item: FavoriteItem,
   update: SeriesUpdate | undefined,

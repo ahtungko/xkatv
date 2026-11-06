@@ -1,4 +1,5 @@
 import { Bell, BellOff } from 'lucide-react'
+import { useEffect } from 'react'
 import { Button } from '@/shared/components/ui/button'
 import { useViewingHistoryStore } from '@/shared/store/viewingHistoryStore'
 import { useAuthStore } from '@/shared/store/authStore'
@@ -9,7 +10,6 @@ import {
   canTrackFavorite,
   trackingKey,
   trackingProgress,
-  unreadEpisodeNumbers,
   matchingTrackingUpdate,
 } from '../lib/seriesTracking'
 import { useTrackingSeasons } from '../hooks/useTrackingSeasons'
@@ -18,6 +18,7 @@ import { TrackingSourceControl } from './TrackingSourceControl'
 import { TrackingRefreshControl } from './TrackingRefreshControl'
 import { NextTrackingSeason } from './NextTrackingSeason'
 import { SeriesCompletionStatus } from './SeriesCompletionStatus'
+import { useSeriesReminderVisit } from '../hooks/useSeriesReminderVisit'
 
 export function TrackingControl({ item }: { item: FavoriteItem }) {
   const setTracking = useFavoritesStore(state => state.setTracking)
@@ -32,9 +33,15 @@ export function TrackingControl({ item }: { item: FavoriteItem }) {
   const tmdbId =
     item.sourceType === 'tmdb' && item.media.mediaType === 'tv' ? item.media.id : undefined
   const { seasons, loading, error, load } = useTrackingSeasons(tmdbId, enabled)
+  const reminderVisit = useSeriesReminderVisit(ownerId)
+  const observeReminders = reminderVisit.observe
+  const key = trackingKey(item)
+  useEffect(() => {
+    if (enabled) observeReminders([{ key, update }])
+  }, [enabled, key, update, observeReminders])
   if (!canTrackFavorite(item)) return null
   const { pendingCount, latestEpisode } = trackingProgress(item, update, history)
-  const newCount = unreadEpisodeNumbers(update).length
+  const newCount = reminderVisit.numbers(key, update).length
   const selectedSeason = item.tracking?.seasonNumber
   const missingSeason =
     selectedSeason !== undefined && !seasons.some(season => season.number === selectedSeason)

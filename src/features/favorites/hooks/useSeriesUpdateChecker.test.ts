@@ -667,13 +667,15 @@ describe('追更交互与后台检查', () => {
     })
     await retry()
     const successful = useSeriesUpdatesStore.getState().entries[key]
-    expect(unreadEpisodeNumbers(successful)).toEqual([3])
+    expect(unreadEpisodeNumbers(successful)).toEqual([])
+    expect(host.querySelector('article')?.textContent).toContain('新增 1 集')
     mocks.getDetail.mockRejectedValueOnce(new Error('单部超时'))
     await retry()
     const failed = useSeriesUpdatesStore.getState().entries[key]
     expect(failed.episodes).toEqual(successful.episodes)
     expect(failed.checkedAt).toBe(successful.checkedAt)
-    expect(unreadEpisodeNumbers(failed)).toEqual([3])
+    expect(unreadEpisodeNumbers(failed)).toEqual([])
+    expect(host.querySelector('article')?.textContent).toContain('新增 1 集')
     expect(host.querySelector('article')?.textContent).toContain('单部超时（显示上次成功结果）')
     expect(useSeriesUpdatesStore.getState().checking).toBe(false)
     mocks.getDetail.mockResolvedValueOnce({
@@ -682,7 +684,8 @@ describe('追更交互与后台检查', () => {
     })
     await retry()
     expect(useSeriesUpdatesStore.getState().entries[key].error).toBeUndefined()
-    expect(unreadEpisodeNumbers(useSeriesUpdatesStore.getState().entries[key])).toEqual([3, 4])
+    expect(unreadEpisodeNumbers(useSeriesUpdatesStore.getState().entries[key])).toEqual([])
+    expect(host.querySelector('article')?.textContent).toContain('新增 2 集')
     expect(host.querySelector('article')?.textContent).not.toContain('单部超时')
   })
 
@@ -973,40 +976,6 @@ describe('追更交互与后台检查', () => {
     expect(useViewingHistoryStore.getState().viewingHistory).toBe(history)
     await settle()
     expect(mocks.getDetail).toHaveBeenCalledTimes(2)
-  })
-
-  it('看完的单集和校准进度消除对应提醒，并保留其他新集', async () => {
-    const id = useFavoritesStore.getState().favorites[0].id
-    useFavoritesStore.getState().setTracking(id, { enabled: true })
-    await mount()
-    await settle()
-    mocks.getDetail.mockResolvedValue({
-      ...detail,
-      episodes: [...detail.episodes, 'https://x/3', 'https://x/4', 'https://x/5'],
-      videoInfo: { ...detail.videoInfo, episodes_names: ['第01集', '第02集', '第03集', '第04集', '第05集'] },
-    })
-    await clickRefresh()
-    expect(host.textContent).toContain('新增 3 集')
-    const record = {
-      recordType: 'cms' as const, title: '测试剧', imageUrl: '', sourceCode: 's',
-      sourceName: '源', vodId: 'a', episodeIndex: 3, episodeName: '第04集',
-      timestamp: Date.now(), playbackPosition: 89, duration: 100,
-    }
-    await act(async () => useViewingHistoryStore.setState({ viewingHistory: [record] }))
-    expect(host.textContent).toContain('新增 3 集')
-    await act(async () => useViewingHistoryStore.setState({ viewingHistory: [{ ...record, playbackPosition: 90 }] }))
-    const key = `${id}::cms`
-    const unread = () => unreadEpisodeNumbers(useSeriesUpdatesStore.getState().entries[key])
-    expect(unread()).toEqual([3, 5])
-    await openProgress()
-    await setProgressInput('3')
-    await clickProgressButton('保存进度')
-    expect(unread()).toEqual([5])
-    const account = useAuthStore.getState().account!.id
-    const receipt = Object.values(useSeriesNotificationsStore.getState().accounts[account])[0]
-    expect(receipt.readEpisodes).toEqual([3, 4])
-    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="标记测试剧更新提醒为已读"]')!.click())
-    expect(unread()).toEqual([])
   })
 
   it('同一源ID的地址变更只重建基准，不把更多旧集误报为新增', async () => {

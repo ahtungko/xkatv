@@ -1,7 +1,7 @@
-import { act, createElement } from 'react'
+import { act, createElement, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SeriesUpdates } from './SeriesUpdates'
 import { usePrivateModeStore } from '@/shared/store/privateModeStore'
 import { useFavoritesStore } from '@/features/favorites/store/favoritesStore'
@@ -13,6 +13,8 @@ import { useAuthStore } from '@/shared/store/authStore'
 import { useSettingStore } from '@/shared/store/settingStore'
 import { useViewingHistoryStore } from '@/shared/store/viewingHistoryStore'
 import { accountSchema } from '../../../../shared/account-rules'
+import { useSeriesNotificationsStore } from '@/features/favorites/store/seriesNotificationsStore'
+import { unreadEpisodeNumbers } from '@/features/favorites/lib/seriesTracking'
 
 const ownerId = '00000000-0000-4000-8000-000000000001'
 const account = (id: string) =>
@@ -68,6 +70,7 @@ const mount = () =>
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   localStorage.clear()
+  useSeriesNotificationsStore.setState({ accounts: {} })
   favorites = [
     favorite('new', '新集剧', 1),
     favorite('pending', '待看剧'),
@@ -116,6 +119,53 @@ afterEach(async () => {
 })
 
 describe('首页追更筛选', () => {
+  it('本次保留新增，下次进入清除已看提示，后台发现的新集仍提示', async () => {
+    const key = trackingKey(favorites[0])
+    await act(async () => root.render(createElement(StrictMode, null,
+      createElement(MemoryRouter, null, createElement(SeriesUpdates)),
+    )))
+    expect(host.querySelector('article')?.textContent).toContain('新增 1 集')
+    expect(unreadEpisodeNumbers(useSeriesUpdatesStore.getState().entries[key])).toEqual([])
+    expect(Object.values(useSeriesNotificationsStore.getState().accounts[ownerId])[0].readEpisodes).toContain(2)
+    await act(async () => root.render(null))
+    await mount()
+    expect(host.textContent).not.toContain('新增 1 集')
+    expect(filterButton('待看').textContent).toBe('待看2')
+    await act(async () => root.render(null))
+    useSeriesUpdatesStore.getState().saveResult(ownerId, key, result(favorites[0], 3))
+    expect(unreadEpisodeNumbers(useSeriesUpdatesStore.getState().entries[key])).toEqual([3])
+    await mount()
+    expect(host.querySelector('article')?.textContent).toContain('新增 1 集')
+    expect(unreadEpisodeNumbers(useSeriesUpdatesStore.getState().entries[key])).toEqual([])
+  })
+
+  it('后台页面不确认提醒，回到前台才保存查看回执', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    const key = trackingKey(favorites[0])
+    await mount()
+    expect(unreadEpisodeNumbers(useSeriesUpdatesStore.getState().entries[key])).toEqual([2])
+    visibility.mockReturnValue('visible')
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    expect(unreadEpisodeNumbers(useSeriesUpdatesStore.getState().entries[key])).toEqual([])
+    expect(host.querySelector('article')?.textContent).toContain('新增 1 集')
+  })
+
+  it('筛选隐藏的剧集不确认，展示后才清除持久化未读', async () => {
+    await mount()
+    await chooseFilter('已追平')
+    const item = favorites[1]
+    const key = trackingKey(item)
+    await act(async () => useSeriesUpdatesStore.getState().saveResult(ownerId, key, result(item, 4)))
+    expect(unreadEpisodeNumbers(useSeriesUpdatesStore.getState().entries[key])).toEqual([4])
+    await chooseFilter('全部')
+    expect(unreadEpisodeNumbers(useSeriesUpdatesStore.getState().entries[key])).toEqual([])
+    const card = Array.from(host.querySelectorAll('article')).find(node => node.textContent?.includes('待看剧'))!
+    expect(card.textContent).toContain('新增 1 集')
+    await act(async () => useFavoritesStore.getState().setTrackingProgress(item.id, 4, 'cms'))
+    expect(card.textContent).toContain('新增 1 集')
+    expect(card.textContent).toContain('已追平')
+  })
+
   it('显示全队列进度和失败数量，筛选不改变进度，切账号后隐藏旧摘要', async () => {
     useSeriesUpdatesStore.setState({
       checking: true,

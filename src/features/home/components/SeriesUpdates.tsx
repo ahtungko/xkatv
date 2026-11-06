@@ -9,7 +9,6 @@ import {
   trackingProgress,
   trackingPlayPath,
   canTrackFavorite,
-  unreadEpisodeNumbers,
   matchingTrackingUpdate,
   trackingBinding,
 } from '@/features/favorites/lib/seriesTracking'
@@ -24,6 +23,7 @@ import { TrackingSourceControl } from '@/features/favorites/components/TrackingS
 import { TrackingRefreshControl } from '@/features/favorites/components/TrackingRefreshControl'
 import { NextTrackingSeason } from '@/features/favorites/components/NextTrackingSeason'
 import { SeriesCompletionStatus } from '@/features/favorites/components/SeriesCompletionStatus'
+import { useSeriesReminderVisit } from '@/features/favorites/hooks/useSeriesReminderVisit'
 import { usePrivateModeStore } from '@/shared/store'
 
 const FILTERS = [
@@ -59,10 +59,11 @@ function SeriesUpdatesContent() {
     checkingKeys,
     checkProgress,
     refresh,
-    markRead,
   } = useSeriesUpdatesStore()
   const sources = useApiStore(state => state.videoAPIs)
   const tmdbEnabled = useTmdbEnabled()
+  const reminderVisit = useSeriesReminderVisit(ownerId)
+  const observeReminders = reminderVisit.observe
   const listId = useId()
   const [selection, setSelection] = useState<{ ownerId: typeof ownerId; value: TrackingFilter }>({
     ownerId,
@@ -96,7 +97,7 @@ function SeriesUpdatesContent() {
         (update?.checkedAt && !sourceAvailable
           ? '上次检查的视频源已停用，请检查设置或重新绑定追更源'
           : undefined)
-      const newCount = unreadEpisodeNumbers(update).length
+      const newCount = reminderVisit.numbers(trackingKey(item), update).length
       return {
         item,
         update,
@@ -128,6 +129,9 @@ function SeriesUpdatesContent() {
   const pendingSeries = rows.filter(row => row.progress.pendingCount > 0).length
   const updatedSeries = rows.filter(row => row.newCount > 0).length
   const visibleRows = rows.filter(row => row.matches[filter])
+  useEffect(() => {
+    observeReminders(visibleRows.map(row => ({ key: trackingKey(row.item), update: row.update })))
+  }, [visibleRows, observeReminders])
 
   if (!rows.length) return null
 
@@ -159,7 +163,7 @@ function SeriesUpdatesContent() {
         </div>
       </div>
       <p className="text-muted-foreground mt-1.5 text-xs">
-        首次追更只显示待看；之后的新集会提醒，观看记录达到 90% 后自动消除对应提醒。待看集数按观看进度估算。
+        新增表示自上次查看追更后发现的更新，本次查看期间保留提示；待看集数按观看进度估算。
       </p>
       {batchProgress && (batchProgress.total > 0 || batchProgress.cached > 0) && (
         <div className="mt-3.5 space-y-1.5" aria-label="追更检查进度">
@@ -334,7 +338,7 @@ function SeriesUpdatesContent() {
                       className="h-7 rounded-full px-2 text-xs"
                       aria-label={`标记${title}更新提醒为已读`}
                       title="清除新集提醒，保留待看进度"
-                      onClick={() => markRead(ownerId, trackingKey(item), update)}
+                      onClick={() => reminderVisit.dismiss(trackingKey(item), update)}
                     >
                       标记已读
                     </Button>
