@@ -4,6 +4,8 @@ import { FavoriteWatchStatus } from '../types/favorites'
 import type { ViewingHistoryItem } from '@/shared/types/video'
 import {
   playableEpisodes,
+  completedReminderEpisodes,
+  sourceReportsCompleted,
   trackingProgress,
   trackingPlayPath,
   type SeriesUpdate,
@@ -67,6 +69,40 @@ const detail = {
 }
 
 describe('追更集数与进度', () => {
+  it('只把视频源明确标注的状态视为完结', () => {
+    for (const value of ['已完结', '完結', '全集', '全30集', '30集全', '更新至第30集已完结', '更新至第30集完结'])
+      expect(sourceReportsCompleted(value)).toBe(true)
+    for (const value of [undefined, '', '更新至30集', '未完结', '连载中', '更新至30集/全40集', '更新至30集未完结'])
+      expect(sourceReportsCompleted(value)).toBe(false)
+  })
+
+  it('完成提醒按单集及季数识别，校准只确认本季范围', () => {
+    const item = {
+      ...tv,
+      tracking: {
+        enabled: true,
+        seasonNumber: 2,
+        progress: {
+          '1': { completedEpisode: 12, calibratedAt: 100 },
+          '2': { completedEpisode: 8, calibratedAt: 100 },
+        },
+      },
+    }
+    const reminders = {
+      ...update,
+      notification: { knownEpisodes: [8, 9, 10, 11], unreadEpisodes: [8, 9, 10, 11] },
+    }
+    const tvRecord = { recordType: 'tmdb' as const, tmdbMediaType: 'tv' as const, tmdbId: 1 }
+    expect(
+      completedReminderEpisodes(item, reminders, [
+        record({ ...tvRecord, tmdbSeasonNumber: 1, episodeName: '第09集', timestamp: 101 }),
+        record({ ...tvRecord, tmdbSeasonNumber: 2, episodeName: '第10集', playbackPosition: 89, timestamp: 101 }),
+        record({ ...tvRecord, tmdbSeasonNumber: 2, episodeName: '第11集', playbackPosition: 90, timestamp: 101 }),
+        record({ ...tvRecord, tmdbSeasonNumber: 2, episodeName: '第09集', timestamp: 99 }),
+      ]),
+    ).toEqual([8, 11])
+  })
+
   it('校准可向前或向后修正，旧观看记录不会覆盖校准值', () => {
     for (const completedEpisode of [0, 3, 9]) {
       const item = {

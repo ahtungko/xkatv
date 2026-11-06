@@ -17,6 +17,7 @@ import { TrackingProgressControl } from './TrackingProgressControl'
 import { TrackingSourceControl } from './TrackingSourceControl'
 import { TrackingRefreshControl } from './TrackingRefreshControl'
 import { NextTrackingSeason } from './NextTrackingSeason'
+import { SeriesCompletionStatus } from './SeriesCompletionStatus'
 
 export function TrackingControl({ item }: { item: FavoriteItem }) {
   const setTracking = useFavoritesStore(state => state.setTracking)
@@ -143,6 +144,7 @@ export function TrackingControl({ item }: { item: FavoriteItem }) {
             : latestEpisode
               ? `更新至第 ${latestEpisode} 集`
               : '等待检查更新'}
+          {latestEpisode > 0 && <SeriesCompletionStatus item={item} update={update} />}
         </p>
       )}
       {enabled && <NextTrackingSeason item={item} update={update} />}

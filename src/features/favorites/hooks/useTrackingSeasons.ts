@@ -7,10 +7,31 @@ export type { TrackingSeason } from '../lib/trackingSeasons'
 
 interface SeasonCacheEntry {
   expiresAt: number
-  result: Promise<TrackingSeason[]>
+  result: Promise<{ seasons: TrackingSeason[]; status: string | null }>
 }
 
 const caches = new WeakMap<ReturnType<typeof getTmdbClient>, Map<string, SeasonCacheEntry>>()
+let activeRequests = 0
+const waitingRequests: Array<() => void> = []
+
+async function limitMetadataRequests<T>(request: () => Promise<T>): Promise<T> {
+  if (activeRequests >= 4) await new Promise<void>(resolve => waitingRequests.push(resolve))
+  else activeRequests++
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      request(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('TMDB metadata request timed out')), 15000)
+      }),
+    ])
+  } finally {
+    clearTimeout(timeout)
+    const next = waitingRequests.shift()
+    if (next) next()
+    else activeRequests--
+  }
+}
 
 async function fetchSeasons(id: number, language: string, force: boolean) {
   const client = getTmdbClient()
@@ -23,8 +44,8 @@ async function fetchSeasons(id: number, language: string, force: boolean) {
   const cached = cache.get(key)
   if (!force && cached && cached.expiresAt > Date.now()) return cached.result
   // 只取基础剧集资料，不附加演职员、推荐、图片等详情页数据。
-  const result = client.tvShows.details(id, undefined, language).then(detail => {
-    return normalizeTrackingSeasons(detail.seasons ?? [])
+  const result = limitMetadataRequests(() => client.tvShows.details(id, undefined, language)).then(detail => {
+    return { seasons: normalizeTrackingSeasons(detail.seasons ?? []), status: detail.status ?? null }
   })
   const entry = { expiresAt: Date.now() + 60 * 60 * 1000, result }
   cache.set(key, entry)
@@ -50,9 +71,10 @@ export function useTrackingSeasons(id: number | undefined, enabled: boolean, ref
   const [state, setState] = useState<{
     key: string
     seasons: TrackingSeason[]
+    status: string | null
     loading: boolean
     error: string | null
-  }>({ key, seasons: [], loading: false, error: null })
+  }>({ key, seasons: [], status: null, loading: false, error: null })
   useEffect(() => {
     mounted.current = true
     return () => {
@@ -67,16 +89,18 @@ export function useTrackingSeasons(id: number | undefined, enabled: boolean, ref
       setState(previous => ({
         key,
         seasons: previous.key === key ? previous.seasons : [],
+        status: previous.key === key ? previous.status : null,
         loading: true,
         error: null,
       }))
       try {
-        const seasons = await fetchSeasons(id, language, force)
+        const { seasons, status } = await fetchSeasons(id, language, force)
         if (!mounted.current || currentKey.current !== key || requestId.current !== request)
           return undefined
         setState({
           key,
           seasons,
+          status,
           loading: false,
           error: seasons.length ? null : '暂无可追更的正片季',
         })
@@ -84,7 +108,7 @@ export function useTrackingSeasons(id: number | undefined, enabled: boolean, ref
       } catch {
         if (!mounted.current || currentKey.current !== key || requestId.current !== request)
           return undefined
-        setState(previous => ({ ...previous, loading: false, error: '季信息加载失败，请重试' }))
+        setState(previous => ({ ...previous, status: null, loading: false, error: '季信息加载失败，请重试' }))
         return undefined
       }
     },
@@ -94,5 +118,5 @@ export function useTrackingSeasons(id: number | undefined, enabled: boolean, ref
   useEffect(() => {
     if (enabled) void load()
   }, [enabled, load, refreshKey])
-  return { ...(state.key === key ? state : { seasons: [], loading: false, error: null }), load }
+  return { ...(state.key === key ? state : { seasons: [], status: null, loading: false, error: null }), load }
 }

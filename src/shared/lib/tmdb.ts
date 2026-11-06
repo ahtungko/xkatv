@@ -112,6 +112,7 @@ function ensureTmdbApiPatched(): void {
 
     const response = await fetch(requestUrl, {
       method: 'GET',
+      signal: AbortSignal.timeout(15000),
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json;charset=utf-8',

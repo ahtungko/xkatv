@@ -5,6 +5,7 @@ import { buildPlaylistMatches } from '@/features/media/components/tmdb-detail/pl
 import {
   favoriteHistory,
   playableEpisodes,
+  sourceReportsCompleted,
   trackingBinding,
   type SeriesUpdate,
 } from './seriesTracking'
@@ -39,6 +40,7 @@ export async function checkSeriesUpdates(
       sourceName: source.name,
       vodId,
       episodes,
+      sourceCompleted: sourceReportsCompleted(detail.videoInfo?.remarks),
     }
   }
 

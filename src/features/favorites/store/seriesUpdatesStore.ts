@@ -23,6 +23,12 @@ interface SeriesUpdatesStore {
   configure: (ownerId: string, keys: string[]) => void
   saveResult: (ownerId: string, key: string, result: SeriesUpdate) => void
   markRead: (ownerId: string, key: string, displayedUpdate: SeriesUpdate) => void
+  markEpisodesRead: (
+    ownerId: string,
+    key: string,
+    displayedUpdate: SeriesUpdate,
+    numbers: number[],
+  ) => void
   refresh: () => void
   refreshOne: (ownerId: string, key: string, bindingKey: string) => void
 }
@@ -63,6 +69,9 @@ export const useSeriesUpdatesStore = create<SeriesUpdatesStore>()(
         set({ entries: { ...get().entries, [key]: merged } })
       },
       markRead: (ownerId, key, displayedUpdate) => {
+        get().markEpisodesRead(ownerId, key, displayedUpdate, unreadEpisodeNumbers(displayedUpdate))
+      },
+      markEpisodesRead: (ownerId, key, displayedUpdate, numbers) => {
         const state = get()
         const current = state.entries[key]
         if (
@@ -74,8 +83,12 @@ export const useSeriesUpdatesStore = create<SeriesUpdatesStore>()(
           current.resourceSignature !== displayedUpdate.resourceSignature
         )
           return
-        // 只确认按钮显示时已看到的提醒，并保留点击前刚到达的新集。
-        const read = new Set(unreadEpisodeNumbers(displayedUpdate))
+        // 只确认快照中的提醒，保留操作前刚到达的新集。
+        const requested = new Set(numbers)
+        const read = new Set(
+          unreadEpisodeNumbers(displayedUpdate).filter(number => requested.has(number)),
+        )
+        if (!read.size) return
         useSeriesNotificationsStore.getState().markRead(ownerId, key, current, [...read])
         set({
           entries: {

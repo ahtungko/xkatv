@@ -23,6 +23,7 @@ import { TrackingProgressControl } from '@/features/favorites/components/Trackin
 import { TrackingSourceControl } from '@/features/favorites/components/TrackingSourceControl'
 import { TrackingRefreshControl } from '@/features/favorites/components/TrackingRefreshControl'
 import { NextTrackingSeason } from '@/features/favorites/components/NextTrackingSeason'
+import { SeriesCompletionStatus } from '@/features/favorites/components/SeriesCompletionStatus'
 import { usePrivateModeStore } from '@/shared/store'
 
 const FILTERS = [
@@ -158,7 +159,7 @@ function SeriesUpdatesContent() {
         </div>
       </div>
       <p className="text-muted-foreground mt-1.5 text-xs">
-        首次追更只显示待看，之后的新集单独提醒；待看集数按观看进度估算，当前未看完的一集也计入。
+        首次追更只显示待看；之后的新集会提醒，观看记录达到 90% 后自动消除对应提醒。待看集数按观看进度估算。
       </p>
       {batchProgress && (batchProgress.total > 0 || batchProgress.cached > 0) && (
         <div className="mt-3.5 space-y-1.5" aria-label="追更检查进度">
@@ -278,6 +279,7 @@ function SeriesUpdatesContent() {
                         </span>
                       )}
                       更新至第 {progress.latestEpisode} 集
+                      <SeriesCompletionStatus item={item} update={update} />
                       {progress.pendingCount > 0 ? (
                         <span className="text-primary ml-2 font-medium">
                           {progress.pendingCount} 集待看

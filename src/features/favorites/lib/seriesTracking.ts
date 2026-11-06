@@ -18,8 +18,18 @@ export interface SeriesUpdate {
   sourceName?: string
   vodId?: string
   episodes?: TrackedEpisode[]
+  sourceCompleted?: boolean
   error?: string
   notification?: { knownEpisodes: number[]; unreadEpisodes: number[] }
+}
+
+/** 只接受来源明确的完结标记；更新中或未完结不能算作完结。 */
+export function sourceReportsCompleted(remarks: string | undefined): boolean {
+  if (!remarks || /未完|不完结|不完結|连载|連載|更新中|待续|待續/i.test(remarks))
+    return false
+  if (/完结|完結|已完/i.test(remarks)) return true
+  if (/更新至/i.test(remarks)) return false
+  return /完结|完結|已完|全集|全\s*\d+\s*集|\d+\s*集全/i.test(remarks)
 }
 
 /** 仅显示当前播放列表中仍可用的新集提醒。 */
@@ -138,6 +148,28 @@ export function favoriteHistory(item: FavoriteItem, history: ViewingHistoryItem[
       (record.tmdbSeasonNumber ?? 1) === (item.tracking?.seasonNumber ?? 1)
     )
   })
+}
+
+/** 已看完的单集和明确校准的连续进度可以消除对应的新集提醒。 */
+export function completedReminderEpisodes(
+  item: FavoriteItem,
+  update: SeriesUpdate,
+  history: ViewingHistoryItem[],
+): number[] {
+  const unread = unreadEpisodeNumbers(update)
+  const calibration = item.tracking?.progress?.[trackingSeasonKey(item)]
+  const completedThrough = calibration?.completedEpisode ?? 0
+  const completed = new Set(unread.filter(number => number <= completedThrough))
+  for (const record of favoriteHistory(item, history)) {
+    if (calibration && record.timestamp <= calibration.calibratedAt) continue
+    if (record.duration <= 0 || record.playbackPosition / record.duration < 0.9) continue
+    const samePlaylist = record.sourceCode === update.sourceCode && record.vodId === update.vodId
+    const number =
+      episodeNumber(record.episodeName) ??
+      (samePlaylist ? update.episodes?.find(ep => ep.index === record.episodeIndex)?.number : undefined)
+    if (number && unread.includes(number)) completed.add(number)
+  }
+  return [...completed]
 }
 
 export function trackingProgress(

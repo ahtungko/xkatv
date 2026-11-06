@@ -202,6 +202,34 @@ const addTrackedShow = (vodId: string, title: string) => {
 }
 
 describe('追更交互与后台检查', () => {
+  it('显示来源明确的完结状态，不把追平当成完结', async () => {
+    const id = useFavoritesStore.getState().favorites[0].id
+    useFavoritesStore.getState().setTracking(id, { enabled: true })
+    mocks.getDetail.mockResolvedValue({
+      ...detail,
+      videoInfo: { ...detail.videoInfo, remarks: '已完结' },
+    })
+    await mountHome()
+    await settle()
+    expect(host.querySelector('article')?.textContent).toContain('源标注已完结')
+    mocks.getDetail.mockResolvedValue({
+      ...detail,
+      videoInfo: { ...detail.videoInfo, remarks: '更新至第2集' },
+    })
+    await retry()
+    expect(host.querySelector('article')?.textContent).not.toContain('完结')
+  })
+
+  it('TMDB 标注剧集结束时显示全剧已完结，即使当前还有待看', async () => {
+    setTmdbFavorite()
+    bindTmdbSeason(1, 's1', 0)
+    mocks.tmdbDetails.mockResolvedValue({ ...airedMetadata, status: 'Ended' })
+    await mountHome()
+    await settle()
+    expect(host.querySelector('article')?.textContent).toContain('全剧已完结')
+    expect(host.querySelector('article')?.textContent).toContain('2 集待看')
+  })
+
   it('视频源缺集时不提前建议跳季，确认看完TMDB已知集数后才提醒', async () => {
     setTmdbFavorite()
     bindTmdbSeason(1, 's1', 2)
@@ -220,16 +248,16 @@ describe('追更交互与后台检查', () => {
     expect(mocks.tmdbDetails).toHaveBeenCalledTimes(1)
   })
 
-  it('首页只在TMDB当前季追平后按需发现新季，回退进度后隐藏提醒', async () => {
+  it('首页预取完结状态，当前季追平后才显示新季，回退进度后隐藏提醒', async () => {
     setTmdbFavorite()
     bindTmdbSeason(1, 's1', 0)
     mocks.tmdbDetails.mockResolvedValue(airedMetadata)
     await mountHome()
     await settle()
-    expect(mocks.tmdbDetails).not.toHaveBeenCalled()
+    expect(mocks.tmdbDetails).toHaveBeenCalledTimes(1)
     expect(host.querySelector('article')?.textContent).not.toContain('已开播')
     await act(async () => useFavoritesStore.getState().setTrackingProgress('tmdb_tv_1', 1, '1'))
-    expect(mocks.tmdbDetails).not.toHaveBeenCalled()
+    expect(mocks.tmdbDetails).toHaveBeenCalledTimes(1)
     await act(async () => useFavoritesStore.getState().setTrackingProgress('tmdb_tv_1', 2, '1'))
     expect(mocks.tmdbDetails).toHaveBeenCalledTimes(1)
     expect(host.querySelector('article')?.textContent).toContain('第 2 季已开播')
@@ -945,6 +973,40 @@ describe('追更交互与后台检查', () => {
     expect(useViewingHistoryStore.getState().viewingHistory).toBe(history)
     await settle()
     expect(mocks.getDetail).toHaveBeenCalledTimes(2)
+  })
+
+  it('看完的单集和校准进度消除对应提醒，并保留其他新集', async () => {
+    const id = useFavoritesStore.getState().favorites[0].id
+    useFavoritesStore.getState().setTracking(id, { enabled: true })
+    await mount()
+    await settle()
+    mocks.getDetail.mockResolvedValue({
+      ...detail,
+      episodes: [...detail.episodes, 'https://x/3', 'https://x/4', 'https://x/5'],
+      videoInfo: { ...detail.videoInfo, episodes_names: ['第01集', '第02集', '第03集', '第04集', '第05集'] },
+    })
+    await clickRefresh()
+    expect(host.textContent).toContain('新增 3 集')
+    const record = {
+      recordType: 'cms' as const, title: '测试剧', imageUrl: '', sourceCode: 's',
+      sourceName: '源', vodId: 'a', episodeIndex: 3, episodeName: '第04集',
+      timestamp: Date.now(), playbackPosition: 89, duration: 100,
+    }
+    await act(async () => useViewingHistoryStore.setState({ viewingHistory: [record] }))
+    expect(host.textContent).toContain('新增 3 集')
+    await act(async () => useViewingHistoryStore.setState({ viewingHistory: [{ ...record, playbackPosition: 90 }] }))
+    const key = `${id}::cms`
+    const unread = () => unreadEpisodeNumbers(useSeriesUpdatesStore.getState().entries[key])
+    expect(unread()).toEqual([3, 5])
+    await openProgress()
+    await setProgressInput('3')
+    await clickProgressButton('保存进度')
+    expect(unread()).toEqual([5])
+    const account = useAuthStore.getState().account!.id
+    const receipt = Object.values(useSeriesNotificationsStore.getState().accounts[account])[0]
+    expect(receipt.readEpisodes).toEqual([3, 4])
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="标记测试剧更新提醒为已读"]')!.click())
+    expect(unread()).toEqual([])
   })
 
   it('同一源ID的地址变更只重建基准，不把更多旧集误报为新增', async () => {
