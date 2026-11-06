@@ -35,14 +35,24 @@ export function useSeriesReminderVisit(owner: string | undefined) {
       if (!owner || !visible || usePrivateModeStore.getState().isPrivateMode) return
       const cache = useSeriesUpdatesStore.getState()
       if (cache.ownerId !== owner) return
+      const additions: Record<string, number[]> = {}
+      const receipts: Array<{ key: string; update: SeriesUpdate; numbers: number[] }> = []
       for (const { key, update } of rows) {
         if (!update || update !== cache.entries[key]) continue
         const unread = unreadEpisodeNumbers(update)
         if (!unread.length) continue
         const id = JSON.stringify([owner, notificationIdentity(key, update)?.resourceKey ?? key])
-        setHeld(previous => ({ ...previous, [id]: unionEpisodes(previous[id] ?? [], unread) }))
-        cache.markRead(owner, key, update)
+        additions[id] = unread
+        receipts.push({ key, update, numbers: unread })
       }
+      if (!receipts.length) return
+      setHeld(previous => {
+        const next = { ...previous }
+        for (const [id, numbers] of Object.entries(additions))
+          next[id] = unionEpisodes(next[id] ?? [], numbers)
+        return next
+      })
+      cache.markReadMany(owner, receipts)
     },
     [owner, visible],
   )

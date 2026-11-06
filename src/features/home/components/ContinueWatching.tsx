@@ -14,6 +14,8 @@ import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { useTmdbEnabled } from '@/shared/hooks/useTmdbMode'
 import { ViewingHistoryCard } from '@/shared/components/common'
 
+const HOME_HISTORY_LIMIT = 20
+
 /**
  * ContinueWatchingSkeleton - 继续观看骨架屏
  */
@@ -53,7 +55,7 @@ export function ContinueWatching() {
 }
 
 function ContinueWatchingContent() {
-  const { viewingHistory } = useViewingHistoryStore()
+  const viewingHistory = useViewingHistoryStore(state => state.viewingHistory)
   const hasHydrated = useViewingHistoryStore.persist.hasHydrated()
   const tmdbEnabled = useTmdbEnabled()
 
@@ -62,6 +64,7 @@ function ContinueWatchingContent() {
     if (tmdbEnabled) return viewingHistory
     return viewingHistory.filter(item => item.recordType !== 'tmdb')
   }, [viewingHistory, tmdbEnabled])
+  const recentHistory = useMemo(() => filteredHistory.slice(0, HOME_HISTORY_LIMIT), [filteredHistory])
 
   const isMobile = useIsMobile()
   const visibleCount = isMobile
@@ -69,7 +72,8 @@ function ContinueWatchingContent() {
     : typeof window !== 'undefined' && window.innerWidth < 1024
       ? 3
       : 5
-  const canDrag = filteredHistory.length > visibleCount
+  const canDrag = recentHistory.length > visibleCount
+  const carouselOptions = useMemo(() => ({ watchDrag: canDrag, duration: 18 }), [canDrag])
 
   const [carouselApi, setCarouselApi] = useState<CarouselApi>()
   const [canScrollPrev, setCanScrollPrev] = useState(false)
@@ -109,15 +113,16 @@ function ContinueWatchingContent() {
           <h2 className="text-lg md:text-xl font-bold tracking-tight text-foreground transition-colors group-hover/title:text-primary">
             继续观看
           </h2>
+          {filteredHistory.length > HOME_HISTORY_LIMIT && <span className="text-xs text-muted-foreground">最近 20 条 · 查看全部</span>}
           <ChevronRight className="size-4 md:size-5 text-muted-foreground transition-transform duration-200 group-hover/title:translate-x-1 group-hover/title:text-primary" />
         </NavLink>
       </div>
 
       {/* 滚动区域 */}
       <div className="relative">
-        <Carousel opts={{ watchDrag: canDrag }} setApi={setCarouselApi}>
+        <Carousel opts={carouselOptions} setApi={setCarouselApi}>
           <CarouselContent className="-ml-3 md:-ml-4">
-            {filteredHistory.map(item => {
+            {recentHistory.map(item => {
               return (
                 <CarouselItem
                   key={`${item.sourceCode}-${item.vodId}-${item.episodeIndex}`}

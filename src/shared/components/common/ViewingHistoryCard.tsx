@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Play } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { NavLink } from 'react-router'
@@ -49,7 +50,7 @@ const getEpisodeLabel = (item: ViewingHistoryItem) => item.episodeName || `第${
 const getRecordTypeLabel = (item: ViewingHistoryItem) => (isTmdbHistoryItem(item) ? 'TMDB' : 'CMS')
 const getSourceLabel = (item: ViewingHistoryItem) => item.sourceName || item.sourceCode || '未知源'
 
-export function ViewingHistoryCard({
+export const ViewingHistoryCard = memo(function ViewingHistoryCard({
   item,
   className,
   selectionMode = false,
@@ -100,11 +101,12 @@ export function ViewingHistoryCard({
           src={item.imageUrl}
           alt={item.title}
           loading="lazy"
+          decoding="async"
         />
 
         {/* 左上角记录源标签 */}
         <div className="pointer-events-none absolute top-2 left-2 flex max-w-[82%] items-center gap-1 transition-opacity duration-300 group-hover:opacity-0">
-          <span className="rounded-md border border-white/10 bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white backdrop-blur-md">
+          <span className="rounded-md border border-white/10 bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white">
             {getRecordTypeLabel(item)}
           </span>
         </div>
@@ -122,7 +124,7 @@ export function ViewingHistoryCard({
       />
 
       {/* Hover 全卡片半透明遮罩 + 播放按钮 */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/35 backdrop-blur-[2px] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
         <div className="flex size-11 items-center justify-center rounded-full bg-white text-black shadow-2xl transition-transform duration-300 ease-out scale-90 group-hover:scale-100">
           <Play className="size-5 fill-current ml-0.5" />
         </div>
@@ -130,17 +132,17 @@ export function ViewingHistoryCard({
 
       {!selectionMode ? (
         <div className="pointer-events-none absolute top-2 right-2 flex max-w-[82%] items-center gap-1 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-          <span className="max-w-[56%] truncate rounded-md border border-white/10 bg-black/70 px-1.5 py-0.5 text-[11px] font-medium text-white backdrop-blur-md">
+          <span className="max-w-[56%] truncate rounded-md border border-white/10 bg-black/70 px-1.5 py-0.5 text-[11px] font-medium text-white">
             {getSourceLabel(item)}
           </span>
-          <span className="rounded-md border border-white/10 bg-black/70 px-1.5 py-0.5 text-[11px] font-medium text-white backdrop-blur-md">
+          <span className="rounded-md border border-white/10 bg-black/70 px-1.5 py-0.5 text-[11px] font-medium text-white">
             {getEpisodeLabel(item)}
           </span>
         </div>
       ) : null}
 
       {!selectionMode ? (
-        <div className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-1.5 rounded-md border border-white/10 bg-black/75 px-2 py-1 text-[11px] text-white backdrop-blur-md opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+        <div className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-1.5 rounded-md border border-white/10 bg-black/75 px-2 py-1 text-[11px] text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100">
           <span className="font-semibold text-primary-foreground">已看 {progressPercentLabel}</span>
           <span className="text-white/75">{progressDetailLabel}</span>
         </div>
@@ -180,7 +182,7 @@ export function ViewingHistoryCard({
         <div className="relative w-[48%] shrink-0 overflow-hidden rounded-lg">
           <AspectRatio ratio={16 / 9} className="bg-muted">
             <img className="size-full object-cover" src={item.imageUrl} alt={item.title} />
-            <div className="pointer-events-none absolute right-1 bottom-1 rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[10px] text-white">
+            <div className="pointer-events-none absolute right-1 bottom-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">
               {progressDetailLabel}
             </div>
             <Progress
@@ -245,4 +247,4 @@ export function ViewingHistoryCard({
       {cardContent}
     </NavLink>
   )
-}
+})

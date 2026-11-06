@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, type CSSProperties } from 'react'
 import { Button } from '@/shared/components/ui/button'
 import {
   DialogContent,
@@ -22,6 +22,12 @@ export function AnnouncementDialogContent({
 
   return (
     <DialogContent
+      overlayClassName="duration-150"
+      style={{
+        '--tw-enter-translate-y': '0px',
+        '--tw-exit-translate-y': '0px',
+        '--tw-animation-duration': '150ms',
+      } as CSSProperties}
       onOpenAutoFocus={event => {
         event.preventDefault()
         titleRef.current?.focus()

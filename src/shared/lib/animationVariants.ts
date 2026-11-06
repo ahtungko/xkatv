@@ -7,23 +7,20 @@ export const pageVariants: Variants = {
   initial: {
     opacity: 0,
     y: 8,
-    filter: 'blur(4px)',
   },
   animate: {
     opacity: 1,
     y: 0,
-    filter: 'blur(0px)',
     transition: {
-      duration: 0.3,
+      duration: 0.18,
       ease: [0.25, 0.46, 0.45, 0.94], // ease-out-quad
     },
   },
   exit: {
     opacity: 0,
     y: -8,
-    filter: 'blur(4px)',
     transition: {
-      duration: 0.2,
+      duration: 0.12,
       ease: [0.55, 0.055, 0.675, 0.19], // ease-in-quad
     },
   },

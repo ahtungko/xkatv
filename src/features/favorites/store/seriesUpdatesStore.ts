@@ -29,6 +29,10 @@ interface SeriesUpdatesStore {
     displayedUpdate: SeriesUpdate,
     numbers: number[],
   ) => void
+  markReadMany: (
+    ownerId: string,
+    rows: Array<{ key: string; update: SeriesUpdate; numbers: number[] }>,
+  ) => void
   refresh: () => void
   refreshOne: (ownerId: string, key: string, bindingKey: string) => void
 }
@@ -71,39 +75,46 @@ export const useSeriesUpdatesStore = create<SeriesUpdatesStore>()(
       markRead: (ownerId, key, displayedUpdate) => {
         get().markEpisodesRead(ownerId, key, displayedUpdate, unreadEpisodeNumbers(displayedUpdate))
       },
-      markEpisodesRead: (ownerId, key, displayedUpdate, numbers) => {
+      markEpisodesRead: (ownerId, key, update, numbers) => {
+        get().markReadMany(ownerId, [{ key, update, numbers }])
+      },
+      markReadMany: (ownerId, rows) => {
         const state = get()
-        const current = state.entries[key]
-        if (
-          state.ownerId !== ownerId ||
-          !current?.notification ||
-          current.sourceCode !== displayedUpdate.sourceCode ||
-          current.vodId !== displayedUpdate.vodId ||
-          (current.bindingKey ?? 'auto') !== (displayedUpdate.bindingKey ?? 'auto') ||
-          current.resourceSignature !== displayedUpdate.resourceSignature
-        )
-          return
-        // 只确认快照中的提醒，保留操作前刚到达的新集。
-        const requested = new Set(numbers)
-        const read = new Set(
-          unreadEpisodeNumbers(displayedUpdate).filter(number => requested.has(number)),
-        )
-        if (!read.size) return
-        useSeriesNotificationsStore.getState().markRead(ownerId, key, current, [...read])
-        set({
-          entries: {
-            ...state.entries,
-            [key]: {
-              ...current,
-              notification: {
-                ...current.notification,
-                unreadEpisodes: current.notification.unreadEpisodes.filter(
-                  number => !read.has(number),
-                ),
-              },
+        if (state.ownerId !== ownerId) return
+        const entries = { ...state.entries }
+        const receipts: Array<{ key: string; update: SeriesUpdate; numbers: number[] }> = []
+        for (const { key, update, numbers } of rows) {
+          const current = entries[key]
+          if (
+            !current?.notification ||
+            current.sourceCode !== update.sourceCode ||
+            current.vodId !== update.vodId ||
+            (current.bindingKey ?? 'auto') !== (update.bindingKey ?? 'auto') ||
+            current.resourceSignature !== update.resourceSignature
+          )
+            continue
+          const requested = new Set(numbers)
+          const read = new Set(
+            unreadEpisodeNumbers(update).filter(
+              number =>
+                requested.has(number) && current.notification!.unreadEpisodes.includes(number),
+            ),
+          )
+          if (!read.size) continue
+          receipts.push({ key, update: current, numbers: [...read] })
+          entries[key] = {
+            ...current,
+            notification: {
+              ...current.notification,
+              unreadEpisodes: current.notification.unreadEpisodes.filter(
+                number => !read.has(number),
+              ),
             },
-          },
-        })
+          }
+        }
+        if (!receipts.length) return
+        useSeriesNotificationsStore.getState().markReadMany(ownerId, receipts)
+        set({ entries })
       },
       refresh: () => set(state => ({ refreshTarget: null, refreshToken: state.refreshToken + 1 })),
       refreshOne: (ownerId, key, bindingKey) =>

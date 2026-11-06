@@ -19,6 +19,10 @@ interface NotificationState {
   error: string | null
   observe: (owner: string, key: string, update: SeriesUpdate) => SeriesUpdate['notification']
   markRead: (owner: string, key: string, update: SeriesUpdate, numbers: number[]) => void
+  markReadMany: (
+    owner: string,
+    rows: Array<{ key: string; update: SeriesUpdate; numbers: number[] }>,
+  ) => void
   applyRemote: (owner: string, rows: RemoteSeriesNotification[]) => void
 }
 
@@ -99,26 +103,44 @@ export const useSeriesNotificationsStore = create<NotificationState>()(
         return notificationView(row)
       },
       markRead: (owner, key, update, numbers) => {
-        get().observe(owner, key, { ...update, error: undefined })
-        const identity = notificationIdentity(key, update)
-        if (!identity) return
-        set(state => {
-          const current = state.accounts[owner]?.[identity.resourceKey]
-          if (!current) return state
+        get().markReadMany(owner, [{ key, update, numbers }])
+      },
+      markReadMany: (owner, rows) => {
+        const state = get()
+        const records = { ...state.accounts[owner] }
+        let changed = false
+        for (const { key, update, numbers } of rows) {
+          const identity = notificationIdentity(key, update)
+          if (!identity) continue
+          const existing = records[identity.resourceKey]
+          const knownEpisodes = unionEpisodes(
+            existing?.knownEpisodes ?? [],
+            update.notification?.knownEpisodes ?? [],
+            update.episodes!.map(ep => ep.number),
+          )
+          const unread = new Set(update.notification?.unreadEpisodes ?? [])
+          const current: LocalSeriesNotification = existing ?? {
+            ...identity,
+            knownEpisodes,
+            baselineEpisodes: knownEpisodes.filter(number => !unread.has(number)),
+            readEpisodes: [],
+            syncedKnownEpisodes: [],
+            syncedReadEpisodes: [],
+          }
           const readEpisodes = unionEpisodes(
             current.readEpisodes,
-            numbers.filter(number => current.knownEpisodes.includes(number)),
+            numbers.filter(number => knownEpisodes.includes(number)),
           )
-          return {
-            accounts: {
-              ...state.accounts,
-              [owner]: {
-                ...state.accounts[owner],
-                [identity.resourceKey]: { ...current, readEpisodes },
-              },
-            },
+          if (
+            !existing ||
+            knownEpisodes.length !== current.knownEpisodes.length ||
+            readEpisodes.length !== current.readEpisodes.length
+          ) {
+            records[identity.resourceKey] = { ...current, knownEpisodes, readEpisodes }
+            changed = true
           }
-        })
+        }
+        if (changed) set({ accounts: { ...state.accounts, [owner]: records } })
       },
       applyRemote: (owner, rows) =>
         set(state => {

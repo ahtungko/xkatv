@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSeriesUpdatesStore } from './seriesUpdatesStore'
 import { unreadEpisodeNumbers, type SeriesUpdate } from '../lib/seriesTracking'
 import { useSeriesNotificationsStore } from './seriesNotificationsStore'
@@ -14,6 +14,21 @@ const result = (numbers: number[], overrides: Partial<SeriesUpdate> = {}): Serie
 })
 
 describe('追更缓存账号隔离', () => {
+  it('一批已读提醒只写入一次提醒缓存和一次检查缓存', () => {
+    const store = useSeriesUpdatesStore.getState()
+    const keys = Array.from({ length: 20 }, (_, index) => `show-${index}`)
+    store.configure('alice', keys)
+    for (const key of keys) {
+      store.saveResult('alice', key, result([1, 2]))
+      store.saveResult('alice', key, result([1, 2, 3]))
+    }
+    const writes = vi.spyOn(Storage.prototype, 'setItem')
+    store.markReadMany('alice', keys.map(key => ({ key, update: useSeriesUpdatesStore.getState().entries[key], numbers: [3] })))
+    expect(writes.mock.calls.filter(([key]) => key === 'xkatv-series-notifications')).toHaveLength(1)
+    expect(writes.mock.calls.filter(([key]) => key === 'xkatv-series-updates')).toHaveLength(1)
+    for (const key of keys) expect(unreadEpisodeNumbers(useSeriesUpdatesStore.getState().entries[key])).toEqual([])
+  })
+
   beforeEach(() => {
     localStorage.clear()
     useSeriesNotificationsStore.setState({

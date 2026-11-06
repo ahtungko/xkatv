@@ -7,7 +7,7 @@ import { pageVariants } from '@/shared/lib/animationVariants'
  * AnimatedOutlet - 带页面过渡动画的 Outlet 包装组件
  *
  * 使用 framer-motion 的 AnimatePresence 实现路由切换时的平滑过渡动画。
- * 动画效果：淡入淡出 + 轻微的垂直位移 + 模糊效果
+ * 动画效果：淡入淡出 + 轻微的垂直位移
  */
 export default function AnimatedOutlet() {
   const location = useLocation()
