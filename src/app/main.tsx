@@ -15,8 +15,10 @@ import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import { getPublicEnv } from '@/shared/config/runtimeEnv'
 import { registerPreloadRecovery } from '@/shared/lib/preloadRecovery'
+import { registerPwa } from '@/shared/lib/pwa'
 
 registerPreloadRecovery()
+registerPwa()
 
 // Capture QR pairing before route/login navigation removes the query string.
 try {

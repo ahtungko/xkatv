@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
 import { collectProjectMetadata, escapeHtml } from './scripts/project-metadata.mjs'
@@ -13,6 +14,13 @@ const manifest = JSON.stringify({
   short_name: project.name,
   description: project.description,
 })
+const swTemplate = readFileSync('scripts/sw.template.js', 'utf8')
+const swPrecachePublicFiles = [
+  'public/offline.html',
+  'public/favicon.svg',
+  'public/web-app-manifest-192x192.png',
+  'public/web-app-manifest-512x512.png',
+]
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -42,8 +50,30 @@ export default defineConfig({
           response.end(manifest)
         })
       },
-      generateBundle() {
+      generateBundle(_options, bundle) {
         this.emitFile({ type: 'asset', fileName: 'site.webmanifest', source: manifest })
+
+        const hash = createHash('sha256')
+        hash.update(swTemplate)
+        hash.update(manifest)
+        for (const filePath of swPrecachePublicFiles) {
+          hash.update(filePath)
+          hash.update(readFileSync(filePath))
+        }
+        for (const fileName of Object.keys(bundle).sort()) {
+          if (fileName === 'sw.js') continue
+          const output = bundle[fileName]
+          hash.update(fileName)
+          if (output.type === 'chunk') {
+            hash.update(output.code)
+          } else {
+            hash.update(output.source)
+          }
+        }
+
+        const swCacheVersion = `xkatv-${project.version}-${hash.digest('hex').slice(0, 12)}`
+        const swSource = swTemplate.replace(/__CACHE_VERSION__/g, swCacheVersion)
+        this.emitFile({ type: 'asset', fileName: 'sw.js', source: swSource })
       },
     },
   ],
