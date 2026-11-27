@@ -7,7 +7,12 @@ export default mergeConfig(
     test: {
       environment: 'jsdom',
       globals: true,
-      include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
+      include: [
+        'src/**/*.test.ts',
+        'scripts/**/*.test.ts',
+        'shared/**/*.test.ts',
+        'workers/**/*.test.ts',
+      ],
       clearMocks: true,
       restoreMocks: true,
     },

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { KeyRound } from 'lucide-react'
 import CloudSync from '@/features/settings/components/CloudSync'
+import NotificationChannels from '@/features/settings/components/NotificationChannels'
 import { SettingsPageShell, SettingsSection } from '@/features/settings/components/common'
 import { Button } from '@/shared/components/ui/button'
 import { Input } from '@/shared/components/ui/input'
@@ -56,6 +57,7 @@ export default function AccountView() {
         description="管理你的密码，查看收藏与观看进度的同步状态。"
       >
         <CloudSync />
+        <NotificationChannels />
         <SettingsSection
           title="修改密码"
           icon={<KeyRound className="size-4" />}

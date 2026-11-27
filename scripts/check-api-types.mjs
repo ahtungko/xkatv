@@ -13,6 +13,7 @@ const files = [
   'api/account-password.ts',
   'api/nsfw-sources.ts',
   'api/proxy.ts',
+  'api/test-notification.ts',
 ].map(file => resolve(file))
 const service = ts.createLanguageService({
   getScriptFileNames: () => files,

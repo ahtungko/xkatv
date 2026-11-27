@@ -1,0 +1,12 @@
+name = "xkatv-series-notifier"
+main = "index.js"
+compatibility_date = "2026-01-01"
+
+[triggers]
+# Run every 3 hours (8 runs/day, well within Cloudflare Free Plan limits)
+crons = ["0 */3 * * *"]
+
+[vars]
+CHECK_COOLDOWN_HOURS = "2"
+MAX_SUBREQUESTS = "42"
+MAX_IDS_PER_BATCH = "20"
