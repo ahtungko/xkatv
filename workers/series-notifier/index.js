@@ -337,10 +337,27 @@ function isAllowedDiscordWebhookUrl(raw) {
   }
 }
 
+function rowHasDiscordDm(row) {
+  return (
+    Boolean(row.discord_enabled) &&
+    row.discord_mode === 'dm' &&
+    Boolean(row.discord_bot_token?.trim()) &&
+    /^\d{17,22}$/.test(String(row.discord_user_id || '').trim())
+  )
+}
+
 function countEnabledChannels(row) {
   let count = 0
   if (row.telegram_enabled && row.telegram_bot_token && row.telegram_chat_id) count += 1
-  if (row.discord_enabled && isAllowedDiscordWebhookUrl(row.discord_webhook_url)) count += 1
+  if (rowHasDiscordDm(row)) {
+    count += 2 // open DM channel + send message
+  } else if (
+    row.discord_enabled &&
+    row.discord_mode !== 'dm' &&
+    isAllowedDiscordWebhookUrl(row.discord_webhook_url)
+  ) {
+    count += 1
+  }
   if (row.webhook_enabled && isAllowedWebhookUrl(row.webhook_url)) count += 1
   return count
 }
@@ -469,7 +486,69 @@ async function deliverUserDigest(channelRow, items, budget) {
     }
   }
 
-  if (channelRow.discord_enabled && isAllowedDiscordWebhookUrl(channelRow.discord_webhook_url)) {
+  if (rowHasDiscordDm(channelRow)) {
+    if (budget.remaining < 2) {
+      errors.push('discord_dm:budget_exhausted')
+    } else {
+      try {
+        const authHeaders = {
+          Authorization: `Bot ${channelRow.discord_bot_token.trim()}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'xkaTV-SeriesNotifier/1.0',
+        }
+        const dmRes = await budget.fetch('https://discord.com/api/v10/users/@me/channels', {
+          method: 'POST',
+          headers: authHeaders,
+          redirect: 'error',
+          body: JSON.stringify({ recipient_id: String(channelRow.discord_user_id).trim() }),
+          signal: AbortSignal.timeout(10_000),
+        })
+        if (!dmRes.ok) {
+          errors.push(`discord_dm_open:${dmRes.status}`)
+        } else {
+          const dmData = await dmRes.json().catch(() => null)
+          const channelId = String(dmData?.id || '').trim()
+          if (!channelId) {
+            errors.push('discord_dm_open:missing_channel_id')
+          } else {
+            const description = items
+              .map(
+                item =>
+                  `• **《${item.title}》** 新增 ${formatEpisodeList(item.newEpisodes)}（当前共 ${item.totalEpisodes} 集）`,
+              )
+              .join('\n')
+            const msgRes = await budget.fetch(
+              `https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}/messages`,
+              {
+                method: 'POST',
+                headers: authHeaders,
+                redirect: 'error',
+                body: JSON.stringify({
+                  embeds: [
+                    {
+                      title: '📺 xkaTV 追剧更新提醒',
+                      description,
+                      color: 0xef4444,
+                      timestamp: new Date().toISOString(),
+                    },
+                  ],
+                }),
+                signal: AbortSignal.timeout(10_000),
+              },
+            )
+            if (!msgRes.ok) errors.push(`discord_dm:${msgRes.status}`)
+            else sent += 1
+          }
+        }
+      } catch (err) {
+        errors.push(`discord_dm:${err.message}`)
+      }
+    }
+  } else if (
+    channelRow.discord_enabled &&
+    channelRow.discord_mode !== 'dm' &&
+    isAllowedDiscordWebhookUrl(channelRow.discord_webhook_url)
+  ) {
     if (budget.remaining <= 0) {
       errors.push('discord:budget_exhausted')
     } else {

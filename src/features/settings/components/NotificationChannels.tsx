@@ -38,7 +38,7 @@ export default function NotificationChannels() {
         const { data, error } = await syncClient
           .from('user_notification_channels')
           .select(
-            'enabled,telegram_enabled,telegram_bot_token,telegram_chat_id,discord_enabled,discord_webhook_url,webhook_enabled,webhook_url,webhook_secret',
+            'enabled,telegram_enabled,telegram_bot_token,telegram_chat_id,discord_enabled,discord_mode,discord_webhook_url,discord_bot_token,discord_user_id,webhook_enabled,webhook_url,webhook_secret',
           )
           .eq('user_id', account.id)
           .maybeSingle()
@@ -263,7 +263,7 @@ export default function NotificationChannels() {
               <div>
                 <p className="text-sm font-medium">Discord</p>
                 <p className="text-muted-foreground text-xs">
-                  在 Discord 频道设置 → 整合 → Webhook 中创建并复制链接。
+                  支持频道 Webhook 或通过你自己的 Bot 发送私信（DM）。
                 </p>
               </div>
               <Switch
@@ -273,16 +273,66 @@ export default function NotificationChannels() {
             </div>
             {config.discord_enabled && (
               <div className="space-y-3 pt-1">
-                <label className="block space-y-1.5 text-xs">
-                  <span className="text-muted-foreground">Webhook URL</span>
-                  <Input
-                    type="password"
-                    autoComplete="off"
-                    placeholder="https://discord.com/api/webhooks/..."
-                    value={config.discord_webhook_url}
-                    onChange={e => update({ discord_webhook_url: e.target.value })}
-                  />
-                </label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={config.discord_mode === 'webhook' ? 'default' : 'outline'}
+                    onClick={() => update({ discord_mode: 'webhook' })}
+                    className="h-7 rounded-full px-3 text-xs"
+                  >
+                    频道 Webhook
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={config.discord_mode === 'dm' ? 'default' : 'outline'}
+                    onClick={() => update({ discord_mode: 'dm' })}
+                    className="h-7 rounded-full px-3 text-xs"
+                  >
+                    私信（DM）
+                  </Button>
+                </div>
+
+                {config.discord_mode === 'webhook' ? (
+                  <label className="block space-y-1.5 text-xs">
+                    <span className="text-muted-foreground">Webhook URL</span>
+                    <Input
+                      type="password"
+                      autoComplete="off"
+                      placeholder="https://discord.com/api/webhooks/..."
+                      value={config.discord_webhook_url}
+                      onChange={e => update({ discord_webhook_url: e.target.value })}
+                    />
+                  </label>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="space-y-1.5 text-xs">
+                      <span className="text-muted-foreground">Bot Token</span>
+                      <Input
+                        type="password"
+                        autoComplete="off"
+                        placeholder="Discord Developer Portal Bot Token"
+                        value={config.discord_bot_token}
+                        onChange={e => update({ discord_bot_token: e.target.value })}
+                      />
+                    </label>
+                    <label className="space-y-1.5 text-xs">
+                      <span className="text-muted-foreground">Discord User ID</span>
+                      <Input
+                        type="text"
+                        autoComplete="off"
+                        placeholder="17–22 位纯数字用户 ID"
+                        value={config.discord_user_id}
+                        onChange={e => update({ discord_user_id: e.target.value })}
+                      />
+                    </label>
+                    <p className="text-muted-foreground text-xs sm:col-span-2">
+                      需确保该 Bot 与你至少在一个共同服务器中，并在隐私设置中允许接收服务器成员私信。
+                    </p>
+                  </div>
+                )}
+
                 <Button
                   type="button"
                   size="sm"

@@ -258,4 +258,71 @@ describe('runSeriesCheck end-to-end', () => {
     expect(summary.notifiedUsers).toBe(0)
     expect(summary.errors[0]).toContain('batch_update:')
   })
+
+  it('delivers Discord DM via per-user Bot Token + User ID', async () => {
+    const calls: string[] = []
+    const mockFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      calls.push(url)
+      if (url.includes('/rest/v1/rpc/get_due_series_notifications')) {
+        return Response.json({
+          channels: [
+            {
+              user_id: 'u1',
+              telegram_enabled: false,
+              telegram_bot_token: '',
+              telegram_chat_id: '',
+              discord_enabled: true,
+              discord_mode: 'dm',
+              discord_webhook_url: '',
+              discord_bot_token: 'MTIzNDU2Nzg5MDEyMzQ1Njc4.GhIjKl.abcdefgh1234567890',
+              discord_user_id: '123456789012345678',
+              webhook_enabled: false,
+              webhook_url: '',
+              webhook_secret: '',
+            },
+          ],
+          items: [duePayload.items[0]],
+        })
+      }
+      if (url.includes('/rest/v1/rpc/batch_update_series_notifications')) {
+        return Response.json(1)
+      }
+      if (url.startsWith('https://cms.example.com')) {
+        return Response.json({
+          list: [
+            {
+              vod_id: '101',
+              vod_name: '剧集A',
+              vod_remarks: '更新至第3集',
+              vod_play_from: 'm3u8',
+              vod_play_url:
+                '第01集$https://v/1.m3u8#第02集$https://v/2.m3u8#第03集$https://v/3.m3u8',
+            },
+          ],
+        })
+      }
+      if (url === 'https://discord.com/api/v10/users/@me/channels') {
+        return Response.json({ id: '999888777666555444' })
+      }
+      if (url === 'https://discord.com/api/v10/channels/999888777666555444/messages') {
+        return Response.json({ id: 'msg1' })
+      }
+      return Response.json({ ok: true })
+    })
+
+    const summary = await runSeriesCheck(
+      {
+        SUPABASE_URL: 'https://proj.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'service-key',
+        CMS_SOURCES_JSON: JSON.stringify({ src1: 'https://cms.example.com/api.php/provide/vod' }),
+      },
+      mockFetch as unknown as typeof fetch,
+    )
+
+    expect(calls).toContain('https://discord.com/api/v10/users/@me/channels')
+    expect(calls).toContain('https://discord.com/api/v10/channels/999888777666555444/messages')
+    expect(summary.notifiedUsers).toBe(1)
+    expect(summary.errors).toEqual([])
+  })
 })

@@ -5,6 +5,7 @@ import {
   formatEpisodeList,
   isAllowedDiscordWebhookUrl,
   isAllowedWebhookUrl,
+  sendDiscordDm,
   sendDiscordWebhook,
   sendGenericWebhook,
   sendTelegramMessage,
@@ -49,6 +50,22 @@ describe('notification-channels validation', () => {
         discord_webhook_url: 'https://discord.com/api/webhooks/123/token',
       }),
     ).toBeNull()
+    expect(
+      validateChannelConfig('discord', {
+        ...DEFAULT_NOTIFICATION_CHANNELS,
+        discord_mode: 'dm',
+        discord_bot_token: 'MTIzNDU2Nzg5MDEyMzQ1Njc4.GhIjKl.abcdefgh1234567890',
+        discord_user_id: '123456789012345678',
+      }),
+    ).toBeNull()
+    expect(
+      validateChannelConfig('discord', {
+        ...DEFAULT_NOTIFICATION_CHANNELS,
+        discord_mode: 'dm',
+        discord_bot_token: 'MTIzNDU2Nzg5MDEyMzQ1Njc4.GhIjKl.abcdefgh1234567890',
+        discord_user_id: 'not-a-snowflake',
+      }),
+    ).toContain('User ID')
     expect(
       validateChannelConfig('webhook', {
         ...DEFAULT_NOTIFICATION_CHANNELS,
@@ -97,5 +114,29 @@ describe('notification-channels formatting and delivery', () => {
     await expect(
       sendTelegramMessage('123:AAH_valid_bot_token_123456789', '999', 'hello', mockFetch),
     ).rejects.toThrow('chat not found')
+  })
+
+  it('sends Discord DM by creating a DM channel then posting embed', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ id: '987654321098765432' }))
+      .mockResolvedValueOnce(Response.json({ id: 'msg1' }))
+
+    await sendDiscordDm(
+      'MTIzNDU2Nzg5MDEyMzQ1Njc4.GhIjKl.abcdefgh1234567890',
+      '123456789012345678',
+      'Title',
+      'Body',
+      mockFetch,
+    )
+
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    expect(mockFetch.mock.calls[0][0]).toBe('https://discord.com/api/v10/users/@me/channels')
+    expect(mockFetch.mock.calls[1][0]).toBe(
+      'https://discord.com/api/v10/channels/987654321098765432/messages',
+    )
+    expect((mockFetch.mock.calls[0][1] as RequestInit).headers).toMatchObject({
+      Authorization: 'Bot MTIzNDU2Nzg5MDEyMzQ1Njc4.GhIjKl.abcdefgh1234567890',
+    })
   })
 })

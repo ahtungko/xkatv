@@ -155,10 +155,10 @@ describe('外部推送通知 PostgreSQL 迁移与 RPC', () => {
     // Alice enabled Telegram; Bob enabled Discord but his account will be disabled
     await db.query(
       `insert into public.user_notification_channels
-        (user_id, enabled, telegram_enabled, telegram_bot_token, telegram_chat_id, discord_enabled, discord_webhook_url)
+        (user_id, enabled, telegram_enabled, telegram_bot_token, telegram_chat_id, discord_enabled, discord_mode, discord_webhook_url, discord_bot_token, discord_user_id)
        values
-        ($1, true, true, '123:tok', '111', false, ''),
-        ($2, true, false, '', '', true, 'https://discord.com/api/webhooks/1/a')`,
+        ($1, true, true, '123:tok', '111', true, 'dm', '', 'bot-tok-alice', '123456789012345678'),
+        ($2, true, false, '', '', true, 'webhook', 'https://discord.com/api/webhooks/1/a', '', '')`,
       [alice, bob],
     )
     await db.query('update public.user_accounts set enabled = false where id = $1', [bob])
@@ -259,13 +259,21 @@ describe('外部推送通知 PostgreSQL 迁移与 RPC', () => {
     await asServiceRole()
     const { rows } = await db.query<{
       data: {
-        channels: Array<{ user_id: string }>
+        channels: Array<{
+          user_id: string
+          discord_mode: string
+          discord_bot_token: string
+          discord_user_id: string
+        }>
         items: Array<{ vod_id: string; title: string; resource_hash: string; user_id: string }>
       }
     }>('select public.get_due_series_notifications(2, 200) as data')
 
     const { channels, items } = rows[0].data
     expect(channels.map(c => c.user_id)).toEqual([alice])
+    expect(channels[0].discord_mode).toBe('dm')
+    expect(channels[0].discord_bot_token).toBe('bot-tok-alice')
+    expect(channels[0].discord_user_id).toBe('123456789012345678')
     expect(items.map(i => i.vod_id).sort()).toEqual(['101', '202'])
     expect(items.find(i => i.vod_id === '101')?.title).toBe('三体')
 

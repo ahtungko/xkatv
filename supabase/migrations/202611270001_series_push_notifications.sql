@@ -9,7 +9,10 @@ create table if not exists public.user_notification_channels (
   telegram_bot_token text not null default '' check (length(telegram_bot_token) <= 256),
   telegram_chat_id text not null default '' check (length(telegram_chat_id) <= 128),
   discord_enabled boolean not null default false,
+  discord_mode text not null default 'webhook' check (discord_mode in ('webhook', 'dm')),
   discord_webhook_url text not null default '' check (length(discord_webhook_url) <= 2048),
+  discord_bot_token text not null default '' check (length(discord_bot_token) <= 256),
+  discord_user_id text not null default '' check (length(discord_user_id) <= 64),
   webhook_enabled boolean not null default false,
   webhook_url text not null default '' check (length(webhook_url) <= 2048),
   webhook_secret text not null default '' check (length(webhook_secret) <= 256),
@@ -46,6 +49,24 @@ create policy "Own active account notification channels delete"
 revoke all on public.user_notification_channels from public, anon, authenticated;
 grant select, insert, update, delete on public.user_notification_channels to authenticated;
 grant all on public.user_notification_channels to service_role;
+
+-- Support idempotent upgrades if user_notification_channels already existed
+alter table public.user_notification_channels
+  add column if not exists discord_mode text not null default 'webhook',
+  add column if not exists discord_bot_token text not null default '',
+  add column if not exists discord_user_id text not null default '';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'user_notification_channels_discord_mode_check'
+  ) then
+    alter table public.user_notification_channels
+      add constraint user_notification_channels_discord_mode_check
+      check (discord_mode in ('webhook', 'dm'));
+  end if;
+end $$;
 
 -- Background-check metadata on series_notifications so the Cron Worker
 -- can rotate through the oldest unchecked resources and skip completed shows.
@@ -142,7 +163,10 @@ returns jsonb language sql stable security definer set search_path = '' as $$
         'telegram_bot_token', ec.telegram_bot_token,
         'telegram_chat_id', ec.telegram_chat_id,
         'discord_enabled', ec.discord_enabled,
+        'discord_mode', ec.discord_mode,
         'discord_webhook_url', ec.discord_webhook_url,
+        'discord_bot_token', ec.discord_bot_token,
+        'discord_user_id', ec.discord_user_id,
         'webhook_enabled', ec.webhook_enabled,
         'webhook_url', ec.webhook_url,
         'webhook_secret', ec.webhook_secret

@@ -67,7 +67,10 @@ export const notificationChannelsSchema = z.object({
   telegram_bot_token: z.string().trim().max(256).default(''),
   telegram_chat_id: z.string().trim().max(128).default(''),
   discord_enabled: z.boolean().default(false),
+  discord_mode: z.enum(['webhook', 'dm']).default('webhook'),
   discord_webhook_url: z.string().trim().max(2048).default(''),
+  discord_bot_token: z.string().trim().max(256).default(''),
+  discord_user_id: z.string().trim().max(64).default(''),
   webhook_enabled: z.boolean().default(false),
   webhook_url: z.string().trim().max(2048).default(''),
   webhook_secret: z.string().trim().max(256).default(''),
@@ -81,7 +84,10 @@ export const DEFAULT_NOTIFICATION_CHANNELS: NotificationChannelsConfig = {
   telegram_bot_token: '',
   telegram_chat_id: '',
   discord_enabled: false,
+  discord_mode: 'webhook',
   discord_webhook_url: '',
+  discord_bot_token: '',
+  discord_user_id: '',
   webhook_enabled: false,
   webhook_url: '',
   webhook_secret: '',
@@ -140,6 +146,17 @@ export function validateChannelConfig(
     return null
   }
   if (channel === 'discord') {
+    if (config.discord_mode === 'dm') {
+      if (!config.discord_bot_token) return '请先填写 Discord Bot Token'
+      if (config.discord_bot_token.length < 20 || /\s/.test(config.discord_bot_token)) {
+        return 'Discord Bot Token 格式无效'
+      }
+      if (!config.discord_user_id) return '请先填写 Discord User ID'
+      if (!/^\d{17,22}$/.test(config.discord_user_id)) {
+        return 'Discord User ID 格式无效（应为 17–22 位纯数字 ID）'
+      }
+      return null
+    }
     if (!config.discord_webhook_url) return '请先填写 Discord Webhook URL'
     if (!isAllowedDiscordWebhookUrl(config.discord_webhook_url)) {
       return 'Discord Webhook URL 格式无效，应以 https://discord.com/api/webhooks/ 开头'
@@ -220,6 +237,80 @@ export async function sendDiscordWebhook(
   if (!response.ok) {
     const body = await response.text().catch(() => '')
     throw new Error(`Discord 推送失败 (HTTP ${response.status})${body ? `: ${body.slice(0, 160)}` : ''}`)
+  }
+}
+
+export async function sendDiscordDm(
+  botToken: string,
+  userId: string,
+  title: string,
+  description: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  if (!botToken.trim() || !/^\d{17,22}$/.test(userId.trim())) {
+    throw new Error('Discord Bot Token 或 User ID 无效')
+  }
+  const authHeaders = {
+    Authorization: `Bot ${botToken.trim()}`,
+    'Content-Type': 'application/json',
+    'User-Agent': 'xkaTV-SeriesNotifier/1.0',
+  }
+
+  const dmRes = await fetchImpl('https://discord.com/api/v10/users/@me/channels', {
+    method: 'POST',
+    headers: authHeaders,
+    redirect: 'error',
+    body: JSON.stringify({ recipient_id: userId.trim() }),
+    signal: AbortSignal.timeout(10_000),
+  })
+  const dmBody = await dmRes.text().catch(() => '')
+  if (!dmRes.ok) {
+    if (dmRes.status === 401) throw new Error('Discord Bot Token 无效或已失效')
+    throw new Error(
+      `创建 Discord 私信频道失败 (HTTP ${dmRes.status})${dmBody ? `: ${dmBody.slice(0, 160)}` : ''}`,
+    )
+  }
+
+  let channelId = ''
+  try {
+    const parsed = JSON.parse(dmBody) as { id?: string }
+    channelId = String(parsed.id || '').trim()
+  } catch {
+    channelId = ''
+  }
+  if (!channelId) {
+    throw new Error('Discord 未返回有效的私信频道 ID')
+  }
+
+  const msgRes = await fetchImpl(
+    `https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}/messages`,
+    {
+      method: 'POST',
+      headers: authHeaders,
+      redirect: 'error',
+      body: JSON.stringify({
+        embeds: [
+          {
+            title,
+            description,
+            color: 0xef4444,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(10_000),
+    },
+  )
+  if (!msgRes.ok) {
+    const body = await msgRes.text().catch(() => '')
+    if (msgRes.status === 403) {
+      throw new Error(
+        'Discord 拒绝发送私信 (HTTP 403)：请确认你的 Bot 与你在同一个服务器中，且已开启允许服务器成员私信',
+      )
+    }
+    throw new Error(
+      `Discord 私信发送失败 (HTTP ${msgRes.status})${body ? `: ${body.slice(0, 160)}` : ''}`,
+    )
   }
 }
 

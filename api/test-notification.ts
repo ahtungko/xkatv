@@ -2,6 +2,7 @@ import type { ApiRequest, ApiResponse } from '../shared/serverless-http.js'
 import { createClient } from '@supabase/supabase-js'
 import { accountSchema } from '../shared/account-rules.js'
 import {
+  sendDiscordDm,
   sendDiscordWebhook,
   sendGenericWebhook,
   sendTelegramMessage,
@@ -63,11 +64,20 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (channel === 'telegram') {
       await sendTelegramMessage(config.telegram_bot_token, config.telegram_chat_id, message)
     } else if (channel === 'discord') {
-      await sendDiscordWebhook(
-        config.discord_webhook_url,
-        '📺 xkaTV 测试通知',
-        `账号「${account.data.username}」已成功连接 Discord 追剧推送通道。\n发送时间：${nowText}`,
-      )
+      if (config.discord_mode === 'dm') {
+        await sendDiscordDm(
+          config.discord_bot_token,
+          config.discord_user_id,
+          '📺 xkaTV 测试通知',
+          `账号「${account.data.username}」已成功连接 Discord 私信推送通道。\n发送时间：${nowText}`,
+        )
+      } else {
+        await sendDiscordWebhook(
+          config.discord_webhook_url,
+          '📺 xkaTV 测试通知',
+          `账号「${account.data.username}」已成功连接 Discord 追剧推送通道。\n发送时间：${nowText}`,
+        )
+      }
     } else {
       await sendGenericWebhook(
         config.webhook_url,
