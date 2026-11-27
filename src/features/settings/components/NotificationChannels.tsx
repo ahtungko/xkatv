@@ -168,7 +168,7 @@ export default function NotificationChannels() {
       title="追剧外部推送"
       icon={<Bell className="size-4" />}
       tone="amber"
-      description="配合定时 Worker 后台检查已追更剧集，发现新集时自动推送至 Telegram、Discord 或自定义 Webhook。"
+      description="后台定时检查已追更剧集，发现新集时自动推送至 Telegram、Discord 或自定义 Webhook。"
     >
       {loading ? (
         <div className="text-muted-foreground flex items-center gap-2 py-2 text-sm">
@@ -177,8 +177,14 @@ export default function NotificationChannels() {
         </div>
       ) : migrationMissing ? (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
-          当前数据库尚未创建推送配置表。请在 Supabase SQL Editor 中执行{' '}
-          <code className="font-mono">202611270001_series_push_notifications.sql</code> 后刷新页面。
+          {account.role === 'admin' ? (
+            <>
+              当前数据库尚未创建推送配置表。请在 Supabase SQL Editor 中执行{' '}
+              <code className="font-mono">202611270001_series_push_notifications.sql</code> 后刷新页面。
+            </>
+          ) : (
+            '追剧外部推送暂未开放，请联系管理员。'
+          )}
         </div>
       ) : (
         <div className="space-y-5">
@@ -355,11 +361,7 @@ export default function NotificationChannels() {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-            <p className="text-muted-foreground text-xs">
-              需部署 <code className="font-mono">workers/series-notifier</code> 定时 Worker（可部署在任意独立
-              Cloudflare 账号）。
-            </p>
+          <div className="flex justify-end pt-1">
             <Button
               type="button"
               disabled={saving}
