@@ -4,6 +4,7 @@ import {
   extractPlayableEpisodeNumbers,
   loadCmsSourcesMap,
   parseCmsSourcesMap,
+  resolveSourceUrl,
   runSeriesCheck,
   sourceReportsCompleted,
   timingSafeEqual,
@@ -29,18 +30,29 @@ describe('series-notifier worker helpers', () => {
     expect(fromConfig.get('env_source_0')).toBe('https://d.example.com')
   })
 
-  it('loads CMS_SOURCES_JSON from a remote URL link', async () => {
+  it('loads CMS_SOURCES_JSON from a remote URL link (including OuonnkiTV format and sub:<id>:<idx>)', async () => {
     const mockFetch = vi.fn(async () =>
       Response.json([
-        { name: 'Remote1', url: 'https://r1.example.com' },
-        { id: 'custom_id', name: 'Remote2', url: 'https://r2.example.com/api.php/provide/vod' },
+        {
+          id: 'iqiyizyapi-com',
+          name: '爱奇艺',
+          url: 'https://iqiyizyapi.com/api.php/provide/vod',
+          detailUrl: 'https://iqiyizyapi.com/api.php/provide/vod',
+        },
+        { name: 'Remote2', url: 'https://r2.example.com/api.php/provide/vod' },
       ]),
     )
     const budget = { fetch: mockFetch }
-    const map = await loadCmsSourcesMap('https://cdn.example.com/sources.json', budget)
+    const map = await loadCmsSourcesMap(
+      'https://raw.githubusercontent.com/Yesbaiwan/OuonnkiTV-Source/refs/heads/main/tv_source/OuonnkiTV/full-noadult.json',
+      budget,
+    )
     expect(mockFetch).toHaveBeenCalledTimes(1)
-    expect(map.get('env_source_0')).toBe('https://r1.example.com')
-    expect(map.get('custom_id')).toBe('https://r2.example.com/api.php/provide/vod')
+    expect(map.get('iqiyizyapi-com')).toBe('https://iqiyizyapi.com/api.php/provide/vod')
+    expect(map.get('env_source_1')).toBe('https://r2.example.com/api.php/provide/vod')
+    expect(resolveSourceUrl(map, 'sub:uuid-123:0', map._singleListUrls)).toBe(
+      'https://iqiyizyapi.com/api.php/provide/vod',
+    )
   })
 
   it('builds comma-separated batch detail URLs matching cms-core path rules', () => {

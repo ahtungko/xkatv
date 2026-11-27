@@ -82,36 +82,55 @@ function isHttpUrl(value) {
   }
 }
 
-function registerSourceArray(items, map) {
+function registerSourceArray(items, map, indexList) {
   items.forEach((item, index) => {
     if (!item || typeof item !== 'object') return
     const id = String(item.id || item.code || item.key || `env_source_${index}`).trim()
     const url = String(item.detailUrl || item.url || '').trim()
-    if (id && url) map.set(id, url)
+    if (!url) return
+    if (id) map.set(id, url)
+    if (!map.has(`env_source_${index}`)) {
+      map.set(`env_source_${index}`, url)
+    }
+    if (indexList) indexList.push(url)
   })
 }
 
-export function parseCmsSourcesMap(raw, targetMap = new Map()) {
+export function resolveSourceUrl(sourcesMap, sourceCode, singleListUrls = null) {
+  if (sourcesMap.has(sourceCode)) return sourcesMap.get(sourceCode)
+  if (Array.isArray(singleListUrls)) {
+    const subMatch = String(sourceCode || '').match(/^sub:[^:]+:(\d+)$/)
+    if (subMatch) {
+      const idx = Number(subMatch[1])
+      if (Number.isInteger(idx) && idx >= 0 && idx < singleListUrls.length) {
+        return singleListUrls[idx]
+      }
+    }
+  }
+  return null
+}
+
+export function parseCmsSourcesMap(raw, targetMap = new Map(), indexList = null) {
   const map = targetMap
   if (!raw || typeof raw !== 'string') return map
   const cleaned = stripSurroundingQuotes(raw)
   if (!cleaned) return map
   const parsed = JSON.parse(cleaned)
   if (Array.isArray(parsed)) {
-    registerSourceArray(parsed, map)
+    registerSourceArray(parsed, map, indexList)
     return map
   }
   if (parsed && typeof parsed === 'object') {
     if (Array.isArray(parsed.videoSources)) {
-      registerSourceArray(parsed.videoSources, map)
+      registerSourceArray(parsed.videoSources, map, indexList)
       return map
     }
     if (Array.isArray(parsed.sources)) {
-      registerSourceArray(parsed.sources, map)
+      registerSourceArray(parsed.sources, map, indexList)
       return map
     }
     if (typeof parsed.url === 'string' && parsed.url.trim()) {
-      registerSourceArray([parsed], map)
+      registerSourceArray([parsed], map, indexList)
       return map
     }
     for (const [id, value] of Object.entries(parsed)) {
@@ -131,6 +150,20 @@ export async function loadCmsSourcesMap(rawInputs, budget) {
   const entries = (Array.isArray(rawInputs) ? rawInputs : [rawInputs])
     .map(v => stripSurroundingQuotes(v))
     .filter(Boolean)
+
+  let listCount = 0
+  let singleListUrls = null
+
+  const captureList = text => {
+    listCount += 1
+    const list = []
+    parseCmsSourcesMap(text, map, list)
+    if (listCount === 1 && list.length > 0) {
+      singleListUrls = list
+    } else {
+      singleListUrls = null
+    }
+  }
 
   for (const entry of entries) {
     // Support single URL or multiple URLs separated by newlines / commas
@@ -174,16 +207,17 @@ export async function loadCmsSourcesMap(rawInputs, budget) {
           if (!nestedRes.ok) {
             throw new Error(`Failed to fetch nested CMS sources URL (${nestedRes.status})`)
           }
-          parseCmsSourcesMap(await nestedRes.text(), map)
+          captureList(await nestedRes.text())
         } else {
-          parseCmsSourcesMap(text, map)
+          captureList(text)
         }
       }
     } else {
-      parseCmsSourcesMap(entry, map)
+      captureList(entry)
     }
   }
 
+  map._singleListUrls = singleListUrls
   return map
 }
 
@@ -555,8 +589,11 @@ export async function runSeriesCheck(env, fetchImpl = fetch) {
 
   // 2. Deduplicate by (source_code, vod_id) and group vod_ids per source
   const bySource = new Map()
+  const resolvedUrls = new Map()
   for (const row of notificationRows) {
-    if (!sourcesMap.has(row.source_code)) continue
+    const resolvedUrl = resolveSourceUrl(sourcesMap, row.source_code, sourcesMap._singleListUrls)
+    if (!resolvedUrl) continue
+    resolvedUrls.set(row.source_code, resolvedUrl)
     if (!bySource.has(row.source_code)) bySource.set(row.source_code, new Map())
     const vodMap = bySource.get(row.source_code)
     if (!vodMap.has(row.vod_id)) vodMap.set(row.vod_id, [])
@@ -582,7 +619,7 @@ export async function runSeriesCheck(env, fetchImpl = fetch) {
   // 3. Batch-fetch CMS details per source
   for (const [sourceCode, vodMap] of bySource.entries()) {
     if (budget.remaining <= reservedForWritesAndPushes()) break
-    const baseUrl = sourcesMap.get(sourceCode)
+    const baseUrl = resolvedUrls.get(sourceCode)
     const allVodIds = [...vodMap.keys()]
     summary.checkedSources += 1
 
