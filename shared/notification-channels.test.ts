@@ -99,12 +99,21 @@ describe('notification-channels formatting and delivery', () => {
 
     expect(mockFetch).toHaveBeenCalledTimes(3)
     expect(mockFetch.mock.calls[0][0]).toContain('https://api.telegram.org/bot')
-    expect((mockFetch.mock.calls[0][1] as RequestInit).redirect).toBe('error')
-    expect((mockFetch.mock.calls[1][1] as RequestInit).redirect).toBe('error')
-    expect((mockFetch.mock.calls[2][1] as RequestInit).redirect).toBe('error')
+    expect((mockFetch.mock.calls[0][1] as RequestInit).redirect).toBe('manual')
+    expect((mockFetch.mock.calls[1][1] as RequestInit).redirect).toBe('manual')
+    expect((mockFetch.mock.calls[2][1] as RequestInit).redirect).toBe('manual')
     expect((mockFetch.mock.calls[2][1] as RequestInit).headers).toMatchObject({
       'X-Webhook-Secret': 'sec123',
     })
+  })
+
+  it('rejects 3xx redirect responses when redirect: manual is used', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(null, { status: 302, headers: { Location: 'http://127.0.0.1/' } }),
+    )
+    await expect(
+      sendGenericWebhook('https://example.com/hook', { ok: true }, undefined, mockFetch),
+    ).rejects.toThrow('不允许重定向')
   })
 
   it('throws if Telegram returns 200 with ok=false', async () => {
@@ -137,6 +146,7 @@ describe('notification-channels formatting and delivery', () => {
     )
     expect((mockFetch.mock.calls[0][1] as RequestInit).headers).toMatchObject({
       Authorization: 'Bot MTIzNDU2Nzg5MDEyMzQ1Njc4.GhIjKl.abcdefgh1234567890',
+      'User-Agent': 'DiscordBot (https://github.com/ahtungko/xkatv, 1.2.6)',
     })
   })
 })

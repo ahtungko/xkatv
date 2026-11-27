@@ -21,6 +21,7 @@
  *   - TRIGGER_SECRET            Optional Bearer token for manual POST /run testing
  */
 
+const DISCORD_BOT_USER_AGENT = 'DiscordBot (https://github.com/ahtungko/xkatv, 1.2.6)'
 const NON_MAIN_EPISODE_RE = /预告|花絮|特辑|特典|彩蛋|解说|片段|trailer|special|preview/i
 const DISCORD_WEBHOOK_HOSTS = new Set([
   'discord.com',
@@ -460,7 +461,7 @@ async function deliverUserDigest(channelRow, items, budget) {
         const res = await budget.fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          redirect: 'error',
+          redirect: 'manual',
           body: JSON.stringify({
             chat_id: channelRow.telegram_chat_id,
             text,
@@ -469,7 +470,7 @@ async function deliverUserDigest(channelRow, items, budget) {
           signal: AbortSignal.timeout(10_000),
         })
         const raw = await res.text().catch(() => '')
-        let apiFailed = !res.ok
+        let apiFailed = !res.ok || (res.status >= 300 && res.status < 400)
         if (!apiFailed && raw) {
           try {
             const parsed = JSON.parse(raw)
@@ -494,16 +495,16 @@ async function deliverUserDigest(channelRow, items, budget) {
         const authHeaders = {
           Authorization: `Bot ${channelRow.discord_bot_token.trim()}`,
           'Content-Type': 'application/json',
-          'User-Agent': 'xkaTV-SeriesNotifier/1.0',
+          'User-Agent': DISCORD_BOT_USER_AGENT,
         }
         const dmRes = await budget.fetch('https://discord.com/api/v10/users/@me/channels', {
           method: 'POST',
           headers: authHeaders,
-          redirect: 'error',
+          redirect: 'manual',
           body: JSON.stringify({ recipient_id: String(channelRow.discord_user_id).trim() }),
           signal: AbortSignal.timeout(10_000),
         })
-        if (!dmRes.ok) {
+        if (!dmRes.ok || (dmRes.status >= 300 && dmRes.status < 400)) {
           errors.push(`discord_dm_open:${dmRes.status}`)
         } else {
           const dmData = await dmRes.json().catch(() => null)
@@ -522,7 +523,7 @@ async function deliverUserDigest(channelRow, items, budget) {
               {
                 method: 'POST',
                 headers: authHeaders,
-                redirect: 'error',
+                redirect: 'manual',
                 body: JSON.stringify({
                   embeds: [
                     {
@@ -536,8 +537,11 @@ async function deliverUserDigest(channelRow, items, budget) {
                 signal: AbortSignal.timeout(10_000),
               },
             )
-            if (!msgRes.ok) errors.push(`discord_dm:${msgRes.status}`)
-            else sent += 1
+            if (!msgRes.ok || (msgRes.status >= 300 && msgRes.status < 400)) {
+              errors.push(`discord_dm:${msgRes.status}`)
+            } else {
+              sent += 1
+            }
           }
         }
       } catch (err) {
@@ -561,8 +565,11 @@ async function deliverUserDigest(channelRow, items, budget) {
           .join('\n')
         const res = await budget.fetch(channelRow.discord_webhook_url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          redirect: 'error',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': DISCORD_BOT_USER_AGENT,
+          },
+          redirect: 'manual',
           body: JSON.stringify({
             username: 'xkaTV 追剧提醒',
             embeds: [
@@ -576,7 +583,7 @@ async function deliverUserDigest(channelRow, items, budget) {
           }),
           signal: AbortSignal.timeout(10_000),
         })
-        if (!res.ok) errors.push(`discord:${res.status}`)
+        if (!res.ok || (res.status >= 300 && res.status < 400)) errors.push(`discord:${res.status}`)
         else sent += 1
       } catch (err) {
         errors.push(`discord:${err.message}`)
@@ -599,7 +606,7 @@ async function deliverUserDigest(channelRow, items, budget) {
         const res = await budget.fetch(channelRow.webhook_url, {
           method: 'POST',
           headers,
-          redirect: 'error',
+          redirect: 'manual',
           body: JSON.stringify({
             event: 'series.update',
             app: 'xkaTV',
@@ -609,7 +616,7 @@ async function deliverUserDigest(channelRow, items, budget) {
           }),
           signal: AbortSignal.timeout(10_000),
         })
-        if (!res.ok) errors.push(`webhook:${res.status}`)
+        if (!res.ok || (res.status >= 300 && res.status < 400)) errors.push(`webhook:${res.status}`)
         else sent += 1
       } catch (err) {
         errors.push(`webhook:${err.message}`)

@@ -170,6 +170,14 @@ export function validateChannelConfig(
   return null
 }
 
+const DISCORD_BOT_USER_AGENT = 'DiscordBot (https://github.com/ahtungko/xkatv, 1.2.6)'
+
+function assertNoRedirect(response: Response, label: string) {
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(`${label} 不允许重定向 (HTTP ${response.status})`)
+  }
+}
+
 export async function sendTelegramMessage(
   botToken: string,
   chatId: string,
@@ -180,7 +188,7 @@ export async function sendTelegramMessage(
   const response = await fetchImpl(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    redirect: 'error',
+    redirect: 'manual',
     body: JSON.stringify({
       chat_id: chatId,
       text,
@@ -188,6 +196,7 @@ export async function sendTelegramMessage(
     }),
     signal: AbortSignal.timeout(10_000),
   })
+  assertNoRedirect(response, 'Telegram')
   const rawBody = await response.text().catch(() => '')
   if (!response.ok) {
     throw new Error(
@@ -219,8 +228,11 @@ export async function sendDiscordWebhook(
   }
   const response = await fetchImpl(webhookUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    redirect: 'error',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': DISCORD_BOT_USER_AGENT,
+    },
+    redirect: 'manual',
     body: JSON.stringify({
       username: 'xkaTV 追剧提醒',
       embeds: [
@@ -234,6 +246,7 @@ export async function sendDiscordWebhook(
     }),
     signal: AbortSignal.timeout(10_000),
   })
+  assertNoRedirect(response, 'Discord Webhook')
   if (!response.ok) {
     const body = await response.text().catch(() => '')
     throw new Error(`Discord 推送失败 (HTTP ${response.status})${body ? `: ${body.slice(0, 160)}` : ''}`)
@@ -253,16 +266,17 @@ export async function sendDiscordDm(
   const authHeaders = {
     Authorization: `Bot ${botToken.trim()}`,
     'Content-Type': 'application/json',
-    'User-Agent': 'xkaTV-SeriesNotifier/1.0',
+    'User-Agent': DISCORD_BOT_USER_AGENT,
   }
 
   const dmRes = await fetchImpl('https://discord.com/api/v10/users/@me/channels', {
     method: 'POST',
     headers: authHeaders,
-    redirect: 'error',
+    redirect: 'manual',
     body: JSON.stringify({ recipient_id: userId.trim() }),
     signal: AbortSignal.timeout(10_000),
   })
+  assertNoRedirect(dmRes, 'Discord')
   const dmBody = await dmRes.text().catch(() => '')
   if (!dmRes.ok) {
     if (dmRes.status === 401) throw new Error('Discord Bot Token 无效或已失效')
@@ -287,7 +301,7 @@ export async function sendDiscordDm(
     {
       method: 'POST',
       headers: authHeaders,
-      redirect: 'error',
+      redirect: 'manual',
       body: JSON.stringify({
         embeds: [
           {
@@ -301,6 +315,7 @@ export async function sendDiscordDm(
       signal: AbortSignal.timeout(10_000),
     },
   )
+  assertNoRedirect(msgRes, 'Discord')
   if (!msgRes.ok) {
     const body = await msgRes.text().catch(() => '')
     if (msgRes.status === 403) {
@@ -333,10 +348,11 @@ export async function sendGenericWebhook(
   const response = await fetchImpl(webhookUrl, {
     method: 'POST',
     headers,
-    redirect: 'error',
+    redirect: 'manual',
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(10_000),
   })
+  assertNoRedirect(response, 'Webhook')
   if (!response.ok) {
     const body = await response.text().catch(() => '')
     throw new Error(`Webhook 推送失败 (HTTP ${response.status})${body ? `: ${body.slice(0, 160)}` : ''}`)
